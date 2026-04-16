@@ -187,7 +187,7 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
       <input type="text" id="cfg-inst" value="PUCV" placeholder="PUCV, U. Chile..."/>
     </div>
     <div class="alert al-g">
-      ✅ <div><strong>Descubrimiento automático:</strong> ORCID se busca por nombre desde el navegador. Scopus y ANID requieren el JSON de <code>Vigilancia2.py</code>.</div>
+      ✅ <div><strong>Descubrimiento automático:</strong> ORCID se busca por nombre desde el navegador. Scopus, ANID y áreas temáticas requieren el JSON de <code>Vigilancia3.py</code>.</div>
     </div>
     <div class="alert al-w">
       ⚠️ <div>Carga el <code>datos_dashboard.json</code> para obtener h-index, citas y publicaciones Scopus.</div>
@@ -669,7 +669,7 @@ function renderOV(inv) {
       </div>
       <div class="sc">
         <div class="sc-lbl">ÁREAS (SCOPUS)</div>
-        <div style="font-size:12px;line-height:1.7">${inv.areas||'<span style="color:var(--muted);font-style:italic">Carga el JSON de Vigilancia2.py</span>'}</div>
+        <div style="font-size:12px;line-height:1.7">${inv.areas||`<span style="color:var(--muted);font-style:italic">${inv.scopus_id ? 'Sin áreas temáticas en Scopus para este perfil' : 'Sin Scopus ID — ejecuta Vigilancia3.py y carga el JSON'}</span>`}</div>
         ${!inv.h_index?`<div class="alert al-w" style="margin-top:10px">⚠ Para ver h-index y citas, carga el <strong>datos_dashboard.json</strong> desde la barra inferior.</div>`:''}
       </div>
     </div>`;
@@ -726,7 +726,7 @@ function renderCol(inv) {
   const t=document.getElementById('tc-col');
   const co=inv.coautores_list||[];
   if(!co.length){
-    t.innerHTML=`<div class="alert al-w">⚠️ Sin datos de colaboración. Carga el JSON de Vigilancia2.py.</div>`;return;
+    t.innerHTML=`<div class="alert al-w">⚠️ Sin datos de colaboración. Ejecuta <code>Vigilancia3.py</code> y carga el <code>datos_dashboard.json</code> desde el botón 📂.</div>`;return;
   }
   const cx=220,cy=130,r=90,n=co.length;
   const nodes=co.map((c,i)=>{const a=(i/Math.max(n,1))*2*Math.PI-Math.PI/2;return{...c,x:cx+r*Math.cos(a),y:cy+r*Math.sin(a)};});
@@ -807,7 +807,7 @@ function renderIDs(inv) {
     <div style="font-size:11px;color:var(--muted);margin-bottom:12px;line-height:1.6">
       Identificadores vinculados a <strong>${inv.nombre_completo}</strong>.<br>
       <span style="color:var(--green)">🔍 auto</span> = descubierto automáticamente por ORCID · 
-      <span style="color:var(--amber)">📂 json</span> = cargado desde Vigilancia2.py · 
+      <span style="color:var(--amber)">📂 json</span> = cargado desde datos_dashboard.json · 
       <span style="color:var(--muted)">📋 planilla</span> = ingresado manualmente
     </div>
     ${row('orcid','ORCID iD',inv.orcid_id,inv.orcid_src||'—',

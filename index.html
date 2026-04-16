@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Vigilancia Tecnológica · PUCV</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#07111f;--panel:#0c1a2e;--card:#101f35;--border:#1a2f4a;
+  --text:#d4e5f7;--muted:#4d6f94;--dim:#0f1e30;
+  --blue:#22d3ee;--green:#34d399;--amber:#fbbf24;--purple:#a78bfa;--coral:#f87171;
+  --orcid:#a6ce39;--scopus:#e9531d;--anid:#4d9ef7;
+}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ── HEADER ── */
+#hdr{background:var(--panel);border-bottom:1px solid var(--border);padding:12px 22px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:100}
+#hdr h1{font-size:15px;font-weight:600}
+#hdr .sub{font-size:11px;color:var(--muted)}
+.badge{font-size:10px;padding:2px 8px;border-radius:4px;font-weight:700}
+.b-or{background:#a6ce3922;color:var(--orcid);border:1px solid #a6ce3944}
+.b-sc{background:#e9531d22;color:var(--scopus);border:1px solid #e9531d44}
+.b-an{background:#0055a522;color:var(--anid);border:1px solid #0055a544}
+
+/* ── UPLOAD ── */
+#up{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:82vh;padding:32px;gap:20px}
+.dropz{border:2px dashed var(--border);border-radius:14px;padding:44px 60px;text-align:center;cursor:pointer;transition:all .2s;max-width:500px;width:100%}
+.dropz:hover,.dropz.drag{border-color:var(--blue);background:rgba(34,211,238,.04)}
+.dropz h2{font-size:17px;margin-bottom:6px}
+.dropz p{font-size:12px;color:var(--muted);margin-top:4px}
+.cfg{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;max-width:500px;width:100%}
+.cfg h3{font-size:11px;color:var(--muted);letter-spacing:1px;margin-bottom:12px}
+.fld{display:flex;flex-direction:column;gap:5px;margin-bottom:10px}
+.fld label{font-size:11px;color:var(--muted)}
+.fld input,.fld select{background:var(--dim);border:1px solid var(--border);border-radius:7px;padding:8px 11px;color:var(--text);font-size:12px;outline:none}
+.fld input:focus{border-color:var(--blue)}
+.alert{padding:10px 13px;border-radius:8px;font-size:11px;margin-bottom:10px;display:flex;gap:7px;line-height:1.5}
+.al-w{background:#fbbf2413;border:1px solid #fbbf2440;color:var(--amber)}
+.al-g{background:#34d39913;border:1px solid #34d39940;color:var(--green)}
+.al-b{background:#22d3ee13;border:1px solid #22d3ee40;color:var(--blue)}
+.btn{padding:9px 18px;border-radius:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s}
+.btn-p{background:var(--blue);color:#000}.btn-p:hover{opacity:.9}
+.btn-s{background:var(--dim);color:var(--text);border:1px solid var(--border)}.btn-s:hover{background:var(--border)}
+.btn-sm{padding:6px 12px;font-size:11px}
+.btn-xs{padding:4px 10px;font-size:10px}
+.tpl-link{font-size:11px;color:var(--blue);cursor:pointer;text-decoration:underline}
+
+/* ── PROCESSING ── */
+#proc{display:none;padding:28px;max-width:660px;margin:0 auto}
+#proc h2{font-size:17px;margin-bottom:6px}
+#proc .sub{font-size:12px;color:var(--muted);margin-bottom:18px}
+.pi{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 15px;margin-bottom:8px}
+.pi-top{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.av{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+.pi-name{font-size:13px;font-weight:500}
+.pi-sub{font-size:10px;color:var(--muted)}
+.pi-steps{display:flex;gap:6px;flex-wrap:wrap}
+.step{font-size:10px;padding:2px 7px;border-radius:4px;font-weight:600;transition:all .3s}
+.s-wait{background:var(--dim);color:var(--muted);border:1px solid var(--border)}
+.s-run{background:#fbbf2420;color:var(--amber);border:1px solid #fbbf2460;animation:pulse .8s ease-in-out infinite}
+.s-ok{background:#34d39920;color:var(--green);border:1px solid #34d39950}
+.s-fail{background:#f8717120;color:var(--coral);border:1px solid #f8717150}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+.pbar{height:3px;background:var(--dim);border-radius:2px;overflow:hidden;margin-top:8px}
+.pbar-fill{height:100%;border-radius:2px;transition:width .4s ease}
+
+/* ── MAIN ── */
+#main{display:none;flex-direction:row;height:calc(100vh - 51px)}
+#sb{width:196px;border-right:1px solid var(--border);display:flex;flex-direction:column;background:var(--panel);overflow-y:auto;flex-shrink:0}
+.sb-h{padding:10px 11px;border-bottom:1px solid var(--border)}
+.sb-h input{width:100%;background:var(--dim);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:11px;outline:none}
+.ii{padding:9px 11px;cursor:pointer;border-left:3px solid transparent;transition:all .12s}
+.ii:hover{background:var(--dim)}
+.ii.active{background:var(--dim)}
+.ii-av{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0}
+.ii-name{font-size:11px;font-weight:500;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ii-sub{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-ft{padding:8px 11px;border-top:1px solid var(--border);margin-top:auto;font-size:10px;color:var(--muted)}
+
+/* ── DETAIL ── */
+#det{flex:1;overflow-y:auto;display:flex;flex-direction:column;min-width:0}
+.ph{padding:16px 20px;border-bottom:1px solid var(--border);background:var(--panel);flex-shrink:0}
+.ph-av{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;flex-shrink:0}
+.ph-name{font-size:16px;font-weight:600;margin-bottom:2px}
+.ph-sub{font-size:11px;color:var(--muted);margin-bottom:7px}
+.tabs{display:flex;border-bottom:1px solid var(--border);background:var(--panel);flex-shrink:0;overflow-x:auto}
+.tb{padding:9px 15px;font-size:11px;font-weight:500;background:transparent;border:none;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;transition:all .12s;white-space:nowrap}
+.tb.on{border-bottom-color:var(--blue);color:var(--blue)}
+.tc{display:none;padding:16px 20px}
+.tc.on{display:block}
+
+/* ── CARDS / TABLES ── */
+.sg{display:grid;gap:10px;margin-bottom:14px}
+.sg4{grid-template-columns:repeat(4,1fr)}
+.sg3{grid-template-columns:repeat(3,1fr)}
+.sg2{grid-template-columns:1fr 1fr}
+.sc{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:13px}
+.sc-lbl{font-size:10px;color:var(--muted);letter-spacing:.5px;margin-bottom:7px}
+.sc-val{font-size:21px;font-weight:700;font-variant-numeric:tabular-nums}
+.sc-sub{font-size:10px;color:var(--muted);margin-top:2px}
+.pub-row{padding:9px 0;border-bottom:1px solid var(--border);display:flex;gap:9px;align-items:flex-start}
+.qb{width:26px;height:18px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0}
+.pub-t{font-size:12px;font-weight:500;line-height:1.4;margin-bottom:2px}
+.pub-m{font-size:11px;color:var(--muted)}
+.a-link{color:var(--blue);text-decoration:none;font-size:10px}
+.a-link:hover{text-decoration:underline}
+.ac{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:13px;margin-bottom:9px}
+.ac-bgs{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:7px}
+.typ{font-size:10px;padding:2px 6px;border-radius:3px;font-weight:600}
+.s-act{background:#34d39920;color:#34d399;border:1px solid #34d39940}
+.s-fin{background:#64748b20;color:#64748b;border:1px solid #64748b40}
+.ac-t{font-size:13px;font-weight:500;margin-bottom:5px;line-height:1.4}
+.ac-m{font-size:11px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap}
+.am-g{color:var(--green);font-weight:500}
+
+/* IDs tab */
+.id-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+.id-src{width:70px;font-size:10px;font-weight:700;flex-shrink:0}
+.id-val{font-family:monospace;font-size:12px;flex:1}
+.id-how{font-size:10px;padding:2px 6px;border-radius:3px}
+.h-auto{background:#34d39920;color:#34d399;border:1px solid #34d39940}
+.h-json{background:#fbbf2420;color:var(--amber);border:1px solid #fbbf2440}
+.h-none{background:var(--dim);color:var(--muted);border:1px solid var(--border)}
+.id-act{font-size:10px}
+.id-act a{color:var(--blue)}
+
+/* Global table */
+.gt{width:100%;border-collapse:collapse;font-size:12px}
+.gt th{text-align:left;padding:7px 9px;background:var(--dim);color:var(--muted);font-size:10px;letter-spacing:.5px;border-bottom:1px solid var(--border)}
+.gt td{padding:7px 9px;border-bottom:1px solid var(--border)}
+.gt tr:hover td{background:var(--dim);cursor:pointer}
+.h-hi{color:#34d399;font-weight:700}.h-md{color:var(--amber);font-weight:600}.c-hi{color:var(--blue);font-weight:600}
+
+/* export bar */
+#ebar{padding:9px 20px;border-top:1px solid var(--border);background:var(--panel);display:flex;align-items:center;gap:8px;flex-shrink:0}
+#ebar span{font-size:11px;color:var(--muted);margin-right:auto}
+
+.hidden{display:none!important}
+.flex{display:flex}.gap8{gap:8px}.mt8{margin-top:8px}.fade{animation:fd .2s ease}
+@keyframes fd{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+
+<div id="hdr">
+  <div><h1>🔬 Vigilancia Tecnológica</h1><div class="sub">PUCV · Instituto de Matemática</div></div>
+  <div class="flex gap8" style="margin-left:auto;flex-wrap:wrap">
+    <span class="badge b-or">ORCID</span>
+    <span class="badge b-sc">Scopus</span>
+    <span class="badge b-an">ANID</span>
+  </div>
+  <button class="btn btn-s btn-sm hidden" id="btn-rst" onclick="resetApp()">↩ Reiniciar</button>
+</div>
+
+<!-- ── UPLOAD ── -->
+<div id="up">
+  <div class="dropz" id="dz" onclick="document.getElementById('fi').click()"
+       ondragover="event.preventDefault();this.classList.add('drag')"
+       ondragleave="this.classList.remove('drag')"
+       ondrop="handleDrop(event)">
+    <div style="font-size:44px;margin-bottom:14px">📋</div>
+    <h2>Cargar planilla de investigadores</h2>
+    <p>Arrastra el Excel o haz clic para seleccionar</p>
+    <p style="margin-top:10px;font-size:11px">Formato: <strong>Nombre · Apellido</strong> · Unidad Académica (opcional)</p>
+    <input type="file" id="fi" accept=".xlsx,.xls" style="display:none" onchange="handleFile(this.files[0])"/>
+  </div>
+
+  <div class="cfg">
+    <h3>CONFIGURACIÓN</h3>
+    <div class="fld">
+      <label>Scopus API Key (Elsevier)</label>
+      <input type="text" id="cfg-sk" value="90872706c1fcd58a030460b802e20e85" placeholder="API key..."/>
+    </div>
+    <div class="fld">
+      <label>Institución (para filtrar resultados ORCID ambiguos)</label>
+      <input type="text" id="cfg-inst" value="PUCV" placeholder="PUCV, U. Chile..."/>
+    </div>
+    <div class="alert al-g">
+      ✅ <div><strong>Descubrimiento automático:</strong> ORCID se busca por nombre desde el navegador. Scopus y ANID requieren el JSON de <code>Vigilancia2.py</code>.</div>
+    </div>
+    <div class="alert al-w">
+      ⚠️ <div>Carga el <code>datos_dashboard.json</code> para obtener h-index, citas y publicaciones Scopus.</div>
+    </div>
+    <div class="fld">
+      <label>Cargar datos_dashboard.json (Scopus + ANID — opcional)</label>
+      <input type="file" id="ji" accept=".json" onchange="loadJSON(this.files[0])" style="color:var(--muted)"/>
+    </div>
+    <div style="margin-top:10px">
+      <span class="tpl-link" onclick="downloadTemplate()">⬇ Descargar plantilla Excel de ejemplo</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── PROCESSING ── -->
+<div id="proc">
+  <h2>⚙️ Descubriendo perfiles</h2>
+  <div class="sub" id="proc-sub">Buscando identificadores en ORCID...</div>
+  <div id="proc-list"></div>
+  <div class="hidden" id="proc-done" style="margin-top:18px;display:flex;gap:10px">
+    <button class="btn btn-p" onclick="showDashboard()">Ver Dashboard →</button>
+  </div>
+</div>
+
+<!-- ── MAIN DASHBOARD ── -->
+<div id="main">
+  <div id="sb">
+    <div class="sb-h">
+      <input type="text" placeholder="🔍 Buscar..." oninput="filterSb(this.value)"/>
+    </div>
+    <div id="inv-list"></div>
+    <div class="sb-ft" id="sb-ft"></div>
+  </div>
+  <div id="det">
+    <div class="ph" id="ph"></div>
+    <div class="tabs" id="tab-bar">
+      <button class="tb on" onclick="sw('ov',this)">📊 Resumen</button>
+      <button class="tb" onclick="sw('pub',this)">📄 Publicaciones</button>
+      <button class="tb" onclick="sw('col',this)">🤝 Colaboraciones</button>
+      <button class="tb" onclick="sw('an',this)">🇨🇱 ANID</button>
+      <button class="tb" onclick="sw('ids',this)">🆔 IDs</button>
+      <button class="tb" onclick="sw('gl',this)">🌐 Vista Global</button>
+    </div>
+    <div id="tc-ov" class="tc on fade"></div>
+    <div id="tc-pub" class="tc fade"></div>
+    <div id="tc-col" class="tc fade"></div>
+    <div id="tc-an" class="tc fade"></div>
+    <div id="tc-ids" class="tc fade"></div>
+    <div id="tc-gl" class="tc fade"></div>
+    <div id="ebar">
+      <span id="eb-info">—</span>
+      <label class="btn btn-s btn-sm" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px">
+        📂 Cargar JSON
+        <input type="file" accept=".json" onchange="loadJSON(this.files[0])" style="display:none"/>
+      </label>
+      <button class="btn btn-s btn-sm" onclick="exportXLSX()">⬇ Excel</button>
+      <button class="btn btn-s btn-sm" onclick="exportJSON()">⬇ JSON</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── STATE ───────────────────────────────────
+const COLS = ['#22d3ee','#a78bfa','#34d399','#fbbf24','#f472b6','#fb923c','#60a5fa','#f87171','#4ade80','#e879f9'];
+const QCOL = {Q1:'#22d3ee',Q2:'#34d399',Q3:'#fbbf24',Q4:'#f87171'};
+const TIPO_COL = {'Fondecyt Regular':'#22d3ee','Fondecyt Iniciación':'#a78bfa','Fondecyt Postdoctorado':'#fbbf24','Fondef':'#fb923c','Anillo':'#f472b6','Basal':'#34d399'};
+let invs=[], jsonData=null, sel=0;
+
+// ─── EXCEL TEMPLATE DOWNLOAD ──────────────────
+function downloadTemplate() {
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([
+    ['Nombre','Apellido','Unidad Académica'],
+    ['Raimundo','Olfos Ayarza','Instituto de Matemática'],
+    ['Carolina','Guerrero Ortiz','Instituto de Matemática'],
+    ['Astrid','Morales Soto','Instituto de Matemática'],
+  ]);
+  ws['!cols'] = [{wch:16},{wch:20},{wch:24}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Investigadores');
+  XLSX.writeFile(wb, 'Plantilla_Investigadores.xlsx');
+}
+
+// ─── FILE HANDLERS ───────────────────────────
+function handleDrop(ev) {
+  ev.preventDefault();
+  document.getElementById('dz').classList.remove('drag');
+  if (ev.dataTransfer.files[0]) handleFile(ev.dataTransfer.files[0]);
+}
+
+function handleFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const wb = XLSX.read(e.target.result, {type:'array'});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+    // Detect header row (contains 'nombre' or 'apellido')
+    let hi = rows.findIndex(r => r.some(c => /nombre|apellido/i.test(String(c))));
+    if (hi < 0) hi = 0;
+    const headers = rows[hi].map(h => String(h).trim().toLowerCase());
+    const get = (row, ...keys) => {
+      for (const k of keys) {
+        const i = headers.findIndex(h => h.includes(k));
+        if (i >= 0 && row[i]) return String(row[i]).trim();
+      }
+      return '';
+    };
+    const dataRows = rows.slice(hi+1).filter(r => r.some(c => c));
+    const rawList = dataRows.map(r => {
+      // Soporte para "Nombre Completo" como columna única
+      let nom = get(r,'nombre') || '';
+      let ape = get(r,'apellido') || '';
+      if (nom && !ape) { // Si solo hay nombre completo, separar
+        const parts = nom.split(/\s+/);
+        nom = parts[0];
+        ape = parts.slice(1).join(' ');
+      }
+      return {
+        nombre   : nom,
+        apellido : ape,
+
+        ua       : get(r,'unidad','ua','departamento','escuela','instituto') || 'Sin especificar',
+        // Si la planilla ya trae IDs (compatibilidad hacia atrás)
+        scopus_id: cleanId(get(r,'scopus')),
+        orcid_id : cleanId(get(r,'orcid','n° orcid')),
+        research_id: get(r,'research'),
+        linea    : get(r,'linea','línea','investigacion'),
+      };
+    }).filter(r => r.nombre || r.apellido);
+    startProcessing(rawList);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+const cleanId = v => {
+  const s = String(v||'').replace(/\n|\r/g,'').trim();
+  return ['sin perfil','nan','none',''].includes(s.toLowerCase()) ? '' : s;
+};
+
+// ─── JSON MERGE ───────────────────────────────
+function loadJSON(file) {
+  if (!file) return;
+  new Promise(res => {
+    const r = new FileReader();
+    r.onload = e => res(e.target.result);
+    r.readAsText(file);
+  }).then(txt => {
+    try {
+      jsonData = JSON.parse(txt);
+      if (invs.length > 0) { mergeJSON(); selectInv(sel); buildSidebar(); }
+      toast(`✅ JSON fusionado — ${jsonData.investigadores?.length||0} investigadores con datos Scopus/ANID`);
+    } catch(e) { toast('❌ Error al leer el JSON', true); }
+  });
+}
+
+function mergeJSON() {
+  if (!jsonData?.investigadores) return;
+  invs.forEach(inv => {
+    const match = jsonData.investigadores.find(j => {
+      const jf = (j.nombre_completo||'').toLowerCase();
+      const ap = inv.apellido.toLowerCase();
+      return jf.includes(ap) ||
+             ap.split(/\s+/).filter(p=>p.length>3).some(p => jf.includes(p));
+    });
+    if (!match) return;
+    if (match.h_index)     inv.h_index     = match.h_index;
+    if (match.documentos)  inv.documentos  = match.documentos;
+    if (match.citas)       inv.citas       = match.citas;
+    if (match.coautores)   inv.coautores   = match.coautores;
+    if (match.areas)       inv.areas       = match.areas;
+    if (match.publicaciones?.length)  inv.publicaciones  = match.publicaciones;
+    if (match.colaboraciones?.length) inv.coautores_list  = match.colaboraciones;
+    if (match.proyectos_anid?.length) inv.proyectos_anid  = match.proyectos_anid;
+    // Preservar IDs que vengan del JSON si no los tenemos
+    if (!inv.scopus_id && match.scopus_id) inv.scopus_id = match.scopus_id;
+    if (!inv.orcid_id && match.orcid_id)   { inv.orcid_id = match.orcid_id; inv.orcid_src='json'; }
+  });
+}
+
+// ─── PROCESSING ───────────────────────────────
+async function startProcessing(rawList) {
+  document.getElementById('up').style.display = 'none';
+  document.getElementById('proc').style.display = 'block';
+  document.getElementById('btn-rst').classList.remove('hidden');
+  invs = [];
+  const list = document.getElementById('proc-list');
+  list.innerHTML = '';
+
+  for (let i = 0; i < rawList.length; i++) {
+    const row = rawList[i];
+    const color = COLS[i % COLS.length];
+    const initials = (row.nombre[0]||'') + ((row.apellido||'')[0]||'');
+    const inv = {
+      ...row,
+      nombre_completo: `${row.nombre} ${row.apellido}`.trim(),
+      color, initials,
+      h_index:0, documentos:0, citas:0, coautores:0,
+      areas:'', empleos_actuales:'', educacion:'', obras_orcid:0,
+      publicaciones:[], coautores_list:[], proyectos_anid:[],
+      orcid_src: row.orcid_id ? 'planilla' : 'descubierto',
+      scopus_src: row.scopus_id ? 'planilla' : 'pendiente',
+    };
+
+    // DOM item
+    const el = document.createElement('div');
+    el.className = 'pi'; el.id = `pi-${i}`;
+    el.innerHTML = `
+      <div class="pi-top">
+        <div class="av" style="background:${color}22;border:1px solid ${color}44;color:${color}">${initials}</div>
+        <div style="flex:1;min-width:0">
+          <div class="pi-name">${inv.nombre_completo}</div>
+          <div class="pi-sub">${inv.ua}</div>
+        </div>
+      </div>
+      <div class="pi-steps" id="steps-${i}">
+        <span class="step s-wait" id="s-orcid-${i}">ORCID…</span>
+        <span class="step s-wait" id="s-orcid-p-${i}">Perfil ORCID…</span>
+        <span class="step s-wait" id="s-scopus-${i}">Scopus (JSON)</span>
+        <span class="step s-wait" id="s-anid-${i}">ANID (JSON)</span>
+      </div>
+      <div class="pbar"><div class="pbar-fill" id="bar-${i}" style="background:${color};width:0"></div></div>`;
+    list.appendChild(el);
+
+    // ── Step 1: descubrir ORCID ──────────────
+    setStep(i,'orcid','run','Buscando ORCID…');
+    setBar(i, 15);
+    if (inv.orcid_id) {
+      setStep(i,'orcid','ok',`✓ ORCID (planilla)`);
+    } else {
+      const found = await discoverORCID(inv.nombre, inv.apellido);
+      if (found) {
+        inv.orcid_id = found; inv.orcid_src = 'descubierto';
+        setStep(i,'orcid','ok',`✓ ${found}`);
+      } else {
+        setStep(i,'orcid','fail','ORCID no encontrado');
+      }
+    }
+    setBar(i, 35);
+
+    // ── Step 2: perfil ORCID ────────────────
+    setStep(i,'orcid-p','run','Leyendo perfil…');
+    if (inv.orcid_id) {
+      const od = await fetchORCID(inv.orcid_id);
+      Object.assign(inv, od);
+      setStep(i,'orcid-p','ok',`✓ ${inv.obras_orcid} obras`);
+    } else {
+      setStep(i,'orcid-p','fail','Sin perfil ORCID');
+    }
+    setBar(i, 60);
+
+    // ── Step 3 & 4: Scopus + ANID (desde JSON) ─
+    if (jsonData?.investigadores) {
+      const match = jsonData.investigadores.find(j => {
+        const jf = (j.nombre_completo||'').toLowerCase();
+        return jf.includes(inv.apellido.toLowerCase()) ||
+               inv.apellido.toLowerCase().split(/\s+/).filter(p=>p.length>3).some(p=>jf.includes(p));
+      });
+      if (match) {
+        if (match.h_index || match.citas || match.documentos) {
+          inv.h_index=match.h_index||0; inv.documentos=match.documentos||0;
+          inv.citas=match.citas||0; inv.coautores=match.coautores||0;
+          inv.areas=match.areas||''; inv.publicaciones=match.publicaciones||[];
+          inv.coautores_list=match.colaboraciones||[];
+          if (!inv.scopus_id && match.scopus_id) { inv.scopus_id=match.scopus_id; inv.scopus_src='json'; }
+          setStep(i,'scopus','ok',`✓ h=${inv.h_index}`);
+        } else { setStep(i,'scopus','fail','Sin métricas'); }
+        if (match.proyectos_anid?.length) {
+          inv.proyectos_anid = match.proyectos_anid;
+          setStep(i,'anid','ok',`✓ ${inv.proyectos_anid.length} proyectos`);
+        } else { setStep(i,'anid','fail','Sin proyectos'); }
+      } else {
+        setStep(i,'scopus','fail','No emparejado');
+        setStep(i,'anid','fail','No emparejado');
+      }
+    } else {
+      setStep(i,'scopus','wait','Requiere JSON');
+      setStep(i,'anid','wait','Requiere JSON');
+    }
+    setBar(i, 100);
+    invs.push(inv);
+    await sleep(200);
+  }
+
+  document.getElementById('proc-done').classList.remove('hidden');
+  document.getElementById('proc-sub').textContent =
+    `${invs.length} investigadores procesados · ${invs.filter(i=>i.orcid_id).length} con ORCID`;
+}
+
+const setBar  = (i,v) => { const b=document.getElementById(`bar-${i}`); if(b) b.style.width=v+'%'; };
+const setStep = (i,k,st,lbl) => {
+  const el=document.getElementById(`s-${k}-${i}`);
+  if(!el) return;
+  el.className=`step s-${st}`;
+  el.textContent=lbl;
+};
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+
+// ─── ORCID DISCOVERY ─────────────────────────
+async function discoverORCID(nombre, apellido) {
+  const inst = document.getElementById('cfg-inst').value || '';
+  // Intentar con apellido compuesto primero, luego solo primer apellido
+  const surnames = [apellido, apellido.split(/\s+/)[0]].filter((v,i,a)=>a.indexOf(v)===i);
+  for (const sn of surnames) {
+    try {
+      const q = `family-name:${encodeURIComponent(sn)}+AND+given-names:${encodeURIComponent(nombre)}`;
+      const r = await fetch(`https://pub.orcid.org/v3.0/search/?q=${q}&rows=5`,
+        {headers:{'Accept':'application/json'}});
+      if (!r.ok) continue;
+      const d = await r.json();
+      const results = d.result||[];
+      if (!results.length) continue;
+      // Si hay un único resultado, tomarlo directamente
+      if (results.length === 1)
+        return results[0]['orcid-identifier']?.path || null;
+      // Si hay varios, intentar filtrar por institución desde ORCID
+      return results[0]['orcid-identifier']?.path || null;
+    } catch { /* CORS u otro error */ }
+    await sleep(300);
+  }
+  return null;
+}
+
+// ─── ORCID PROFILE ───────────────────────────
+async function fetchORCID(id) {
+  if (!id) return {};
+  const h = {'Accept':'application/json'};
+  const res = {};
+  try {
+    const [er,dr,wr] = await Promise.all([
+      fetch(`https://pub.orcid.org/v3.0/${id}/employments`,{headers:h}),
+      fetch(`https://pub.orcid.org/v3.0/${id}/educations`,{headers:h}),
+      fetch(`https://pub.orcid.org/v3.0/${id}/works`,{headers:h}),
+    ]);
+    if (er.ok) {
+      const d=await er.json();
+      const emp=[];
+      for(const g of d['affiliation-group']||[]){
+        for(const s of g.summaries||[]){
+          const e=s['employment-summary']||{};
+          if(!e['end-date']){
+            const org=e.organization?.name||'';
+            const role=e['role-title']||'';
+            const dep=e['department-name']||'';
+            emp.push([role,dep,org].filter(Boolean).join(' · '));
+          }
+        }
+      }
+      res.empleos_actuales=emp.slice(0,2).join(' | ');
+    }
+    if (dr.ok) {
+      const d=await dr.json();
+      const ed=[];
+      for(const g of (d['affiliation-group']||[]).slice(0,3)){
+        for(const s of g.summaries||[]){
+          const e=s['education-summary']||{};
+          const org=e.organization?.name||'';
+          const role=e['role-title']||'';
+          const año=(e['end-date']?.year?.value)||'';
+          ed.push(`${role} · ${org}${año?' ('+año+')':''}`);
+        }
+      }
+      res.educacion=ed.slice(0,3).join('\n');
+    }
+    if (wr.ok) { const d=await wr.json(); res.obras_orcid=(d.group||[]).length; }
+  } catch(e){ console.warn('ORCID profile error',id,e); }
+  return res;
+}
+
+// ─── DASHBOARD ────────────────────────────────
+function showDashboard() {
+  document.getElementById('proc').style.display='none';
+  document.getElementById('main').style.display='flex';
+  buildSidebar(); selectInv(0);
+  document.getElementById('eb-info').textContent =
+    `${invs.length} investigadores · ${new Date().toLocaleDateString('es-CL')}`;
+}
+
+function buildSidebar() {
+  const list=document.getElementById('inv-list'); list.innerHTML='';
+  invs.forEach((inv,i)=>{
+    const el=document.createElement('div');
+    el.className='ii'+(i===sel?' active':'');
+    el.id=`si-${i}`; el.onclick=()=>selectInv(i);
+    el.style.borderLeftColor = i===sel ? inv.color : 'transparent';
+    el.innerHTML=`<div class="flex gap8" style="align-items:center">
+      <div class="ii-av" style="background:${inv.color}22;border:1px solid ${inv.color}44;color:${inv.color}">${inv.initials}</div>
+      <div style="min-width:0">
+        <div class="ii-name" style="color:${i===sel?inv.color:'#7a9bbf'}">${inv.nombre} ${inv.apellido.split(' ')[0]}</div>
+        <div class="ii-sub">${inv.ua}</div>
+      </div>
+    </div>`;
+    list.appendChild(el);
+  });
+  document.getElementById('sb-ft').textContent=`${invs.length} investigadores`;
+}
+
+function filterSb(q) {
+  invs.forEach((_,i)=>{
+    const el=document.getElementById(`si-${i}`);
+    const v=(invs[i].nombre_completo+invs[i].ua).toLowerCase().includes(q.toLowerCase());
+    if(el) el.style.display=v?'':'none';
+  });
+}
+
+function selectInv(i) {
+  document.querySelectorAll('.ii').forEach(el=>el.classList.remove('active'));
+  const sitem=document.getElementById(`si-${i}`);
+  if(sitem){sitem.classList.add('active');sitem.style.borderLeftColor=invs[i].color;}
+  sel=i;
+  const inv=invs[i];
+  renderPH(inv); renderOV(inv); renderPub(inv); renderCol(inv); renderAN(inv); renderIDs(inv);
+  sw('ov',document.querySelector('.tb'));
+}
+
+// ─── PROFILE HEADER ──────────────────────────
+function renderPH(inv) {
+  document.getElementById('ph').innerHTML=`
+    <div class="flex gap8" style="align-items:center">
+      <div class="ph-av" style="background:${inv.color}22;border:2px solid ${inv.color}60;color:${inv.color}">${inv.initials}</div>
+      <div style="flex:1">
+        <div class="ph-name">${inv.nombre_completo}</div>
+        <div class="ph-sub">${inv.ua}</div>
+        <div class="flex gap8 mt8" style="flex-wrap:wrap">
+          ${inv.orcid_id?`<span class="badge b-or" title="${inv.orcid_src}">ORCID: ${inv.orcid_id}</span>`:''}
+          ${inv.scopus_id?`<span class="badge b-sc">Scopus: ${inv.scopus_id}</span>`:''}
+          ${inv.research_id?`<span class="badge" style="background:var(--dim);color:var(--muted);border:1px solid var(--border)">RID: ${inv.research_id}</span>`:''}
+        </div>
+      </div>
+    </div>`;
+}
+
+// ─── OVERVIEW TAB ─────────────────────────────
+function renderOV(inv) {
+  const t=document.getElementById('tc-ov');
+  t.innerHTML=`
+    <div class="sg sg4">
+      ${sc('📈','Índice H',inv.h_index,inv.h_index?'Scopus':'Sin datos',inv.h_index>=15?'var(--green)':inv.h_index>=8?'var(--amber)':'var(--muted)')}
+      ${sc('💬','Citas Totales',inv.citas.toLocaleString(),'Scopus',inv.citas>=500?'var(--blue)':'var(--muted)')}
+      ${sc('📄','Documentos',inv.documentos,'Scopus','var(--purple)')}
+      ${sc('🆔','Obras ORCID',inv.obras_orcid,inv.orcid_id?'Auto-descubierto':'Sin ORCID','var(--orcid)')}
+    </div>
+    <div class="sg sg3">
+      ${sc('🤝','Coautores',inv.coautores,'red Scopus','var(--coral)')}
+      ${sc('🇨🇱','Proyectos ANID',inv.proyectos_anid.length,inv.proyectos_anid.filter(p=>(p.estado||p.status)==='Activo').length+' activos','var(--amber)')}
+      ${sc('📋','Publicaciones',inv.publicaciones.length,'cargadas vía JSON','var(--green)')}
+    </div>
+    <div class="sg sg2">
+      <div class="sc">
+        <div class="sc-lbl">EMPLEO ACTUAL (ORCID)</div>
+        <div style="font-size:12px;line-height:1.7">${inv.empleos_actuales||'<span style="color:var(--muted);font-style:italic">No disponible en ORCID</span>'}</div>
+        ${inv.educacion?`<div class="sc-lbl" style="margin-top:10px">FORMACIÓN</div>
+        ${inv.educacion.split('\n').map(e=>`<div style="font-size:11px;color:var(--muted);margin-top:2px">${e}</div>`).join('')}`:''}
+      </div>
+      <div class="sc">
+        <div class="sc-lbl">ÁREAS (SCOPUS)</div>
+        <div style="font-size:12px;line-height:1.7">${inv.areas||'<span style="color:var(--muted);font-style:italic">Carga el JSON de Vigilancia2.py</span>'}</div>
+        ${!inv.h_index?`<div class="alert al-w" style="margin-top:10px">⚠ Para ver h-index y citas, carga el <strong>datos_dashboard.json</strong> desde la barra inferior.</div>`:''}
+      </div>
+    </div>`;
+}
+const sc=(icon,lbl,val,sub,col)=>
+  `<div class="sc"><div class="sc-lbl">${icon} ${lbl}</div><div class="sc-val" style="color:${col}">${val}</div>${sub?`<div class="sc-sub">${sub}</div>`:''}</div>`;
+
+// ─── PUBLICATIONS TAB ────────────────────────
+function renderPub(inv) {
+  const t=document.getElementById('tc-pub');
+  if(!inv.publicaciones.length){
+    t.innerHTML=`<div class="alert al-w">⚠️ Sin publicaciones. Carga el JSON generado por <code>Vigilancia2.py</code> para ver publicaciones con métricas Scopus.</div>`;
+    return;
+  }
+  t.innerHTML=`<div style="font-size:11px;color:var(--muted);margin-bottom:11px">${inv.publicaciones.length} publicaciones · Scopus</div>`+
+    inv.publicaciones.map(p=>`
+    <div class="pub-row">
+      ${p.q?`<div class="qb" style="background:${QCOL[p.q]||'#555'}22;border:1px solid ${QCOL[p.q]||'#555'}44;color:${QCOL[p.q]||'#888'}">${p.q}</div>`
+           :`<div class="qb" style="background:var(--dim);color:var(--muted)">—</div>`}
+      <div style="flex:1;min-width:0">
+        <div class="pub-t">${p.titulo}</div>
+        <div class="pub-m">
+          ${p.revista?p.revista+' · ':''}${p.año||''}
+          ${p.citas?` · <span style="color:${inv.color}">↗ ${p.citas} citas</span>`:''}
+          ${p.doi?` · <a href="https://doi.org/${p.doi}" target="_blank" class="a-link">DOI</a>`:''}
+          ${p.enlace?` · <a href="${p.enlace}" target="_blank" class="a-link">Scopus 🔗</a>`:''}
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+// ─── COLLABORATIONS TAB ──────────────────────
+function renderCol(inv) {
+  const t=document.getElementById('tc-col');
+  const co=inv.coautores_list||[];
+  if(!co.length){
+    t.innerHTML=`<div class="alert al-w">⚠️ Sin datos de colaboración. Carga el JSON de Vigilancia2.py.</div>`;return;
+  }
+  const cx=220,cy=130,r=90,n=co.length;
+  const nodes=co.map((c,i)=>{const a=(i/Math.max(n,1))*2*Math.PI-Math.PI/2;return{...c,x:cx+r*Math.cos(a),y:cy+r*Math.sin(a)};});
+  t.innerHTML=`
+    <div class="sg sg3" style="margin-bottom:14px">
+      ${sc('🤝','Colaboradores',co.length,'','var(--blue)')}
+      ${sc('🌐','Internacionales',co.filter(c=>c.country&&c.country!=='CL').length,'','var(--green)')}
+      ${sc('🇨🇱','Nacionales',co.filter(c=>!c.country||c.country==='CL').length,'','var(--amber)')}
+    </div>
+    <div class="sc" style="margin-bottom:14px">
+      <div class="sc-lbl">GRAFO DE CO-AUTORÍA</div>
+      <svg viewBox="0 0 440 260" style="width:100%">
+        ${nodes.map(nd=>`<line x1="${cx}" y1="${cy}" x2="${nd.x}" y2="${nd.y}" stroke="${inv.color}" stroke-width=".8" stroke-opacity=".3"/>`).join('')}
+        <circle cx="${cx}" cy="${cy}" r="22" fill="${inv.color}25" stroke="${inv.color}" stroke-width="1.5"/>
+        <text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="700" fill="${inv.color}">${inv.initials}</text>
+        ${nodes.map(nd=>`
+          <circle cx="${nd.x}" cy="${nd.y}" r="17" fill="#0f1e30" stroke="#1a2f4a" stroke-width=".8"/>
+          <text x="${nd.x}" y="${nd.y-4}" text-anchor="middle" font-size="7" fill="#d4e5f7" font-weight="500">${(nd.nombre||nd.name||'').split('. ').pop()}</text>
+          <text x="${nd.x}" y="${nd.y+6}" text-anchor="middle" font-size="6" fill="#4d6f94">${nd.afil||nd.inst||''}</text>`).join('')}
+      </svg>
+    </div>
+    ${co.map(c=>`
+    <div class="id-row">
+      <div style="width:26px;height:26px;border-radius:50%;background:${inv.color}22;border:1px solid ${inv.color}44;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:${inv.color};flex-shrink:0">
+        ${(c.nombre||c.name||'??').split(' ').map(w=>w[0]).join('').slice(0,2)}</div>
+      <div style="flex:1"><div style="font-size:13px;font-weight:500">${c.nombre||c.name||''}</div><div style="font-size:11px;color:var(--muted)">${c.afil||c.inst||''}</div></div>
+      ${c.n?`<span style="font-size:11px;color:${inv.color};font-weight:600">${c.n} papers</span>`:''}
+    </div>`).join('')}`;
+}
+
+// ─── ANID TAB ────────────────────────────────
+function renderAN(inv) {
+  const t=document.getElementById('tc-an');
+  const ps=inv.proyectos_anid||[];
+  if(!ps.length){
+    t.innerHTML=`<div class="alert al-w">⚠️ Sin proyectos ANID. Carga el <code>datos_dashboard.json</code> desde la barra inferior — el botón <strong>📂 Cargar JSON</strong>.</div>`;
+    return;
+  }
+  const tot=ps.reduce((a,p)=>a+(parseInt(p.monto)||0),0);
+  const act=ps.filter(p=>(p.estado||p.status)==='Activo');
+  t.innerHTML=`
+    <div class="sg sg3" style="margin-bottom:14px">
+      ${sc('🇨🇱','Total',ps.length,'','var(--amber)')}
+      ${sc('✅','Activos',act.length,'','var(--green)')}
+      ${sc('💰','Financiamiento',tot>=1e6?'$'+(tot/1e6).toFixed(0)+'M':'$'+tot.toLocaleString(),'acumulado','var(--green)')}
+    </div>`+
+    ps.map(p=>{
+      const tipo=p.tipo||p.tipo_concurso||'';
+      const tc=TIPO_COL[tipo]||'#64748b';
+      const est=(p.estado||p.status||'').toLowerCase();
+      return `<div class="ac">
+        <div class="ac-bgs">
+          <span class="typ" style="background:${tc}22;color:${tc};border:1px solid ${tc}44">${tipo}</span>
+          <span class="typ ${est==='activo'?'s-act':'s-fin'}">${p.estado||p.status||''}</span>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:3px">${p.codigo||p.code||''}</div>
+        <div class="ac-t">${p.titulo||p.title||''}</div>
+        <div class="ac-m">
+          <span>Inicio: ${p.año_inicio||p.year||'—'}</span>
+          ${p.año_fin?`<span>Fin: ${p.año_fin}</span>`:''}
+          ${p.monto?`<span class="am-g">$${parseInt(p.monto).toLocaleString()}</span>`:''}
+        </div>
+      </div>`;
+    }).join('');
+}
+
+// ─── IDs TAB ─────────────────────────────────
+function renderIDs(inv) {
+  const t=document.getElementById('tc-ids');
+  const row=(src,label,val,how,extra='')=>`
+    <div class="id-row">
+      <span class="id-src" style="color:${src==='orcid'?'var(--orcid)':src==='scopus'?'var(--scopus)':'var(--anid)'}">${label}</span>
+      <span class="id-val">${val||'<span style="color:var(--muted)">No disponible</span>'}</span>
+      <span class="id-how ${how==='auto'?'h-auto':how==='json'?'h-json':'h-none'}">${how==='auto'?'🔍 auto':how==='json'?'📂 json':how==='planilla'?'📋 planilla':'—'}</span>
+      <span class="id-act">${extra}</span>
+    </div>`;
+  t.innerHTML=`
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;line-height:1.6">
+      Identificadores vinculados a <strong>${inv.nombre_completo}</strong>.<br>
+      <span style="color:var(--green)">🔍 auto</span> = descubierto automáticamente por ORCID · 
+      <span style="color:var(--amber)">📂 json</span> = cargado desde Vigilancia2.py · 
+      <span style="color:var(--muted)">📋 planilla</span> = ingresado manualmente
+    </div>
+    ${row('orcid','ORCID iD',inv.orcid_id,inv.orcid_src||'—',
+      inv.orcid_id?`<a class="a-link" href="https://orcid.org/${inv.orcid_id}" target="_blank">Ver perfil ↗</a>`:
+      `<a class="a-link" href="https://orcid.org/orcid-search/search?searchQuery=${encodeURIComponent(inv.nombre_completo)}" target="_blank">Buscar en ORCID ↗</a>`)}
+    ${row('scopus','Scopus ID',inv.scopus_id,inv.scopus_src||'—',
+      inv.scopus_id?`<a class="a-link" href="https://www.scopus.com/authid/detail.uri?authorId=${inv.scopus_id}" target="_blank">Ver en Scopus ↗</a>`:
+      `<a class="a-link" href="https://www.scopus.com/search/form.uri?display=authorLookup#author" target="_blank">Buscar en Scopus ↗</a>`)}
+    ${row('scopus','Research ID',inv.research_id,inv.research_id?'planilla':'—','')}
+    <div style="margin-top:16px;font-size:11px;color:var(--muted)">
+      Unidad: <strong>${inv.ua}</strong>
+    </div>
+    ${!inv.scopus_id?`<div class="alert al-b" style="margin-top:14px">
+      ℹ️ Para obtener el Scopus Author ID sin buscarlo manualmente, ejecuta <code>python Vigilancia2.py</code> con la misma planilla — busca por nombre y lo vincula automáticamente, luego carga el JSON aquí.</div>`:''}`;
+}
+
+// ─── GLOBAL VIEW ─────────────────────────────
+function renderGL() {
+  const t=document.getElementById('tc-gl');
+  const withORCID=invs.filter(i=>i.orcid_id).length;
+  const withScopus=invs.filter(i=>i.scopus_id).length;
+  const withANID=invs.filter(i=>i.proyectos_anid.length>0).length;
+  t.innerHTML=`
+    <div class="sg sg3" style="margin-bottom:14px">
+      ${sc('🆔','Con ORCID',withORCID,`${Math.round(withORCID/invs.length*100)}% del total`,'var(--orcid)')}
+      ${sc('📊','Con Scopus',withScopus,withScopus?'métricas disponibles':'Carga JSON','var(--scopus)')}
+      ${sc('🇨🇱','Con ANID',withANID,withANID?'proyectos registrados':'Carga JSON','var(--anid)')}
+    </div>
+    <div style="overflow-x:auto">
+    <table class="gt">
+      <thead><tr>
+        <th>Investigador</th><th>UA</th>
+        <th style="text-align:right">H</th>
+        <th style="text-align:right">Citas</th>
+        <th style="text-align:right">Docs</th>
+        <th style="text-align:right">ORCID</th>
+        <th style="text-align:right">ANID</th>
+        <th>ORCID iD</th>
+      </tr></thead>
+      <tbody>${invs.map((inv,i)=>`
+        <tr onclick="selectInv(${i});sw('ov',document.querySelector('.tb'))">
+          <td><div class="flex gap8" style="align-items:center">
+            <div style="width:22px;height:22px;border-radius:50%;background:${inv.color}22;border:1px solid ${inv.color}44;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:${inv.color};flex-shrink:0">${inv.initials}</div>
+            <strong>${inv.nombre_completo}</strong>
+          </div></td>
+          <td style="font-size:11px;color:var(--muted)">${inv.ua}</td>
+          <td style="text-align:right"><span class="${inv.h_index>=15?'h-hi':inv.h_index>=8?'h-md':''}">${inv.h_index||'—'}</span></td>
+          <td style="text-align:right"><span class="${inv.citas>=500?'c-hi':''}">${inv.citas?inv.citas.toLocaleString():'—'}</span></td>
+          <td style="text-align:right">${inv.documentos||'—'}</td>
+          <td style="text-align:right">${inv.obras_orcid||'—'}</td>
+          <td style="text-align:right">${inv.proyectos_anid.length||'—'}</td>
+          <td style="font-size:10px;color:var(--muted)">${inv.orcid_id||'Sin ORCID'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>`;
+}
+
+// ─── TAB SWITCHING ───────────────────────────
+function sw(name, btn) {
+  document.querySelectorAll('.tc').forEach(el=>{el.classList.remove('on');el.style.display='none';});
+  document.querySelectorAll('.tb').forEach(el=>el.classList.remove('on'));
+  const tgt=document.getElementById(`tc-${name}`);
+  if(tgt){tgt.style.display='block';tgt.classList.add('on');}
+  if(btn){
+    const btns=document.querySelectorAll('.tb');
+    btns.forEach(b=>{ if(b.textContent.toLowerCase().includes(name)||
+      (name==='ov'&&b.textContent.includes('Resumen'))||
+      (name==='pub'&&b.textContent.includes('Pub'))||
+      (name==='col'&&b.textContent.includes('Col'))||
+      (name==='an'&&b.textContent.includes('ANID'))||
+      (name==='ids'&&b.textContent.includes('ID'))||
+      (name==='gl'&&b.textContent.includes('Global')))
+      b.classList.add('on');
+    });
+  }
+  if(name==='gl') renderGL();
+}
+
+// ─── EXPORT ──────────────────────────────────
+function exportXLSX() {
+  const wb=XLSX.utils.book_new();
+  const res=[['Investigador','UA','ORCID iD','Fuente ORCID','Scopus ID','Research ID','H-index','Documentos','Citas','Coautores','Obras ORCID','Proyectos ANID']];
+  invs.forEach(i=>res.push([i.nombre_completo,i.ua,i.orcid_id,i.orcid_src,i.scopus_id,i.research_id,i.h_index,i.documentos,i.citas,i.coautores,i.obras_orcid,i.proyectos_anid.length]));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(res),'Resumen');
+  const pubs=[['Investigador','Título','Revista','Año','Citas','DOI','Enlace']];
+  invs.forEach(i=>i.publicaciones.forEach(p=>pubs.push([i.nombre_completo,p.titulo,p.revista,p.año,p.citas,p.doi,p.enlace])));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(pubs),'Publicaciones');
+  const anid=[['Investigador','Código','Título','Tipo','Año','Monto','Estado']];
+  invs.forEach(i=>i.proyectos_anid.forEach(p=>anid.push([i.nombre_completo,p.codigo||p.code,p.titulo||p.title,p.tipo,p.año_inicio||p.year,p.monto,p.estado||p.status])));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(anid),'ANID');
+  XLSX.writeFile(wb,`Vigilancia_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+function exportJSON() {
+  const blob=new Blob([JSON.stringify({generado:new Date().toISOString(),investigadores:invs},null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=`vigilancia_${new Date().toISOString().slice(0,10)}.json`; a.click();
+}
+
+// ─── UTILS ───────────────────────────────────
+function toast(msg,isErr=false){
+  const t=document.createElement('div');
+  t.textContent=msg;
+  Object.assign(t.style,{position:'fixed',bottom:'22px',left:'50%',transform:'translateX(-50%)',
+    background:isErr?'#7f1d1d':'#0f2d1a',border:`1px solid ${isErr?'#f87171':'#34d399'}`,
+    color:isErr?'#fca5a5':'#34d399',padding:'11px 18px',borderRadius:'8px',fontSize:'12px',
+    zIndex:'9999',maxWidth:'460px',textAlign:'center',fontWeight:'500',boxShadow:'0 4px 20px rgba(0,0,0,.4)'});
+  document.body.appendChild(t); setTimeout(()=>t.remove(),4200);
+}
+
+function resetApp(){
+  invs=[]; jsonData=null; sel=0;
+  ['up','proc','main'].forEach(id=>document.getElementById(id).style.display='');
+  document.getElementById('up').style.display='flex';
+  document.getElementById('proc').style.display='none';
+  document.getElementById('main').style.display='none';
+  document.getElementById('btn-rst').classList.add('hidden');
+  document.getElementById('fi').value='';
+}
+</script>
+</body>
+</html>

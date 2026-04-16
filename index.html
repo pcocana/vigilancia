@@ -107,6 +107,14 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 .pub-m{font-size:11px;color:var(--muted)}
 .a-link{color:var(--blue);text-decoration:none;font-size:10px}
 .a-link:hover{text-decoration:underline}
+.oa-badge{display:inline-flex;align-items:center;gap:3px;font-size:9px;padding:2px 6px;
+  border-radius:3px;font-weight:700;letter-spacing:.3px;cursor:default;white-space:nowrap}
+.oa-badge a{color:inherit;text-decoration:none}.oa-badge a:hover{text-decoration:underline}
+.sjr-val{font-size:10px;font-weight:600;color:var(--green);margin-left:2px}
+.solo-oa{font-size:9px;padding:1px 5px;border-radius:3px;background:#a78bfa22;
+  color:var(--purple);border:1px solid #a78bfa44;font-weight:600}
+.pub-oa-bar{display:flex;height:10px;border-radius:4px;overflow:hidden;margin:6px 0 4px}
+.pub-oa-seg{height:100%}
 .ac{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:13px;margin-bottom:9px}
 .ac-bgs{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:7px}
 .typ{font-size:10px;padding:2px 6px;border-radius:3px;font-weight:600}
@@ -245,6 +253,13 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 // ─── STATE ───────────────────────────────────
 const COLS = ['#22d3ee','#a78bfa','#34d399','#fbbf24','#f472b6','#fb923c','#60a5fa','#f87171','#4ade80','#e879f9'];
 const QCOL = {Q1:'#22d3ee',Q2:'#34d399',Q3:'#fbbf24',Q4:'#f87171'};
+const OA_COL = {
+  gold  :{bg:'#FFF3CD',fg:'#7D5A00',lbl:'Gold OA',  tip:'Publicado en revista 100% Open Access'},
+  green :{bg:'#D6EDDA',fg:'#006400',lbl:'Green OA', tip:'Copia libre en repositorio o preprint'},
+  hybrid:{bg:'#D4E4F4',fg:'#1a5276',lbl:'Hybrid OA',tip:'Artículo OA en revista de suscripción'},
+  bronze:{bg:'#FDEBD0',fg:'#7d4e00',lbl:'Bronze OA',tip:'Libre en web del editor sin licencia'},
+  closed:{bg:'var(--dim)',fg:'var(--muted)',lbl:'Cerrado',tip:'Sin acceso libre disponible'},
+};
 const TIPO_COL = {'Fondecyt Regular':'#22d3ee','Fondecyt Iniciación':'#a78bfa','Fondecyt Postdoctorado':'#fbbf24','Fondef':'#fb923c','Anillo':'#f472b6','Basal':'#34d399'};
 let invs=[], jsonData=null, sel=0;
 
@@ -621,11 +636,30 @@ function renderOV(inv) {
       ${sc('📄','Documentos',inv.documentos,'Scopus','var(--purple)')}
       ${sc('🆔','Obras ORCID',inv.obras_orcid,inv.orcid_id?'Auto-descubierto':'Sin ORCID','var(--orcid)')}
     </div>
-    <div class="sg sg3">
+    <div class="sg sg4">
       ${sc('🤝','Coautores',inv.coautores,'red Scopus','var(--coral)')}
       ${sc('🇨🇱','Proyectos ANID',inv.proyectos_anid.length,inv.proyectos_anid.filter(p=>(p.estado||p.status)==='Activo').length+' activos','var(--amber)')}
-      ${sc('📋','Publicaciones',inv.publicaciones.length,'cargadas vía JSON','var(--green)')}
+      ${sc('📋','Publicaciones',inv.publicaciones.length,'Scopus + OpenAlex','var(--green)')}
+      ${(()=>{const n=inv.n_oa||inv.publicaciones.filter(p=>p.is_oa).length;
+        const tot=inv.publicaciones.length;const pct=tot?Math.round(n/tot*100):0;
+        return sc('🔓','Open Access',n+' ('+pct+'%)','de '+tot+' publicaciones',
+          pct>=50?'var(--green)':pct>0?'var(--amber)':'var(--muted)');})()}
     </div>
+    ${inv.publicaciones.length?(()=>{
+      const cnt={gold:0,green:0,hybrid:0,bronze:0,closed:0};
+      inv.publicaciones.forEach(p=>{const s=p.oa_status||'closed';if(s in cnt)cnt[s]++;});
+      const tot=inv.publicaciones.length||1;
+      if(!Object.values(cnt).some(Boolean)) return '';
+      const segs=Object.entries(cnt).filter(([,n])=>n>0)
+        .map(([s,n])=>`<div class="pub-oa-seg" style="width:${Math.round(n/tot*100)}%;background:${OA_COL[s]?.fg||'#888'}" title="${OA_COL[s]?.lbl||s}: ${n}"></div>`).join('');
+      const lbls=Object.entries(cnt).filter(([,n])=>n>0)
+        .map(([s,n])=>`<span style="font-size:10px;color:${OA_COL[s]?.fg||'#888'}"><b>${n}</b> ${OA_COL[s]?.lbl||s}</span>`).join('<span style="color:var(--muted)"> · </span>');
+      return `<div class="sc" style="margin-bottom:12px">
+        <div class="sc-lbl" style="margin-bottom:6px">DISTRIBUCIÓN OPEN ACCESS</div>
+        <div class="pub-oa-bar">${segs}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">${lbls}</div>
+      </div>`;
+    })():''}
     <div class="sg sg2">
       <div class="sc">
         <div class="sc-lbl">EMPLEO ACTUAL (ORCID)</div>
@@ -647,21 +681,41 @@ const sc=(icon,lbl,val,sub,col)=>
 function renderPub(inv) {
   const t=document.getElementById('tc-pub');
   if(!inv.publicaciones.length){
-    t.innerHTML=`<div class="alert al-w">⚠️ Sin publicaciones. Carga el JSON generado por <code>Vigilancia2.py</code> para ver publicaciones con métricas Scopus.</div>`;
+    t.innerHTML=`<div class="alert al-w">⚠️ Sin publicaciones. Carga el JSON generado por <code>Vigilancia3.py</code>.</div>`;
     return;
   }
-  t.innerHTML=`<div style="font-size:11px;color:var(--muted);margin-bottom:11px">${inv.publicaciones.length} publicaciones · Scopus</div>`+
+  const nOA=inv.publicaciones.filter(p=>p.is_oa).length;
+  const nSoloOA=inv.publicaciones.filter(p=>p.solo_oa).length;
+  const nQ1=inv.publicaciones.filter(p=>p.q==='Q1').length;
+  const oaBadge=p=>{
+    const s=p.oa_status||'closed'; const o=OA_COL[s]||OA_COL.closed;
+    const inner=p.oa_url&&s!=='closed'
+      ?`<a href="${p.oa_url}" target="_blank" title="${o.tip}">${o.lbl}</a>`
+      :`<span title="${o.tip}">${o.lbl}</span>`;
+    return `<span class="oa-badge" style="background:${o.bg};color:${o.fg}">${inner}</span>`;
+  };
+  t.innerHTML=`
+    <div style="display:flex;gap:10px;margin-bottom:11px;flex-wrap:wrap;align-items:center">
+      <span style="font-size:11px;color:var(--muted)">${inv.publicaciones.length} publicaciones · Scopus + OpenAlex</span>
+      ${nOA?`<span style="font-size:10px;color:#34d399;font-weight:600">🔓 ${nOA} en OA</span>`:''}
+      ${nQ1?`<span style="font-size:10px;color:#22d3ee;font-weight:600">Q1: ${nQ1}</span>`:''}
+      ${nSoloOA?`<span class="solo-oa">✦ ${nSoloOA} solo OpenAlex</span>`:''}
+    </div>`+
     inv.publicaciones.map(p=>`
-    <div class="pub-row">
+    <div class="pub-row" style="${p.solo_oa?'border-left:2px solid #a78bfa;padding-left:8px':''}">
       ${p.q?`<div class="qb" style="background:${QCOL[p.q]||'#555'}22;border:1px solid ${QCOL[p.q]||'#555'}44;color:${QCOL[p.q]||'#888'}">${p.q}</div>`
            :`<div class="qb" style="background:var(--dim);color:var(--muted)">—</div>`}
       <div style="flex:1;min-width:0">
         <div class="pub-t">${p.titulo}</div>
-        <div class="pub-m">
-          ${p.revista?p.revista+' · ':''}${p.año||''}
-          ${p.citas?` · <span style="color:${inv.color}">↗ ${p.citas} citas</span>`:''}
-          ${p.doi?` · <a href="https://doi.org/${p.doi}" target="_blank" class="a-link">DOI</a>`:''}
-          ${p.enlace?` · <a href="${p.enlace}" target="_blank" class="a-link">Scopus 🔗</a>`:''}
+        <div class="pub-m" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:3px">
+          ${p.revista?`<span>${p.revista}</span>`:''}
+          ${p.año?`<span>· ${p.año}</span>`:''}
+          ${p.sjr?`<span class="sjr-val">SJR ${parseFloat(p.sjr).toFixed(2)}</span>`:''}
+          ${oaBadge(p)}
+          ${p.citas?`<span style="color:${inv.color};font-weight:600;font-size:10px">↗ ${p.citas} citas</span>`:''}
+          ${p.doi?`<a href="https://doi.org/${p.doi}" target="_blank" class="a-link">DOI</a>`:''}
+          ${p.enlace&&!p.solo_oa?`<a href="${p.enlace}" target="_blank" class="a-link">Scopus 🔗</a>`:''}
+          ${p.solo_oa?`<span class="solo-oa">OpenAlex</span>`:''}
         </div>
       </div>
     </div>`).join('');
@@ -766,21 +820,32 @@ function renderIDs(inv) {
     <div style="margin-top:16px;font-size:11px;color:var(--muted)">
       Unidad: <strong>${inv.ua}</strong>
     </div>
+    ${row('orcid','OpenAlex ID',inv.openalex_id||'',inv.openalex_id?'json':'—',
+      inv.openalex_id?`<a class="a-link" href="https://openalex.org/authors/${inv.openalex_id}" target="_blank">Ver en OpenAlex ↗</a>`
+        :`<a class="a-link" href="https://openalex.org/authors?search=${encodeURIComponent(inv.nombre_completo)}" target="_blank">Buscar en OpenAlex ↗</a>`)}
     ${!inv.scopus_id?`<div class="alert al-b" style="margin-top:14px">
-      ℹ️ Para obtener el Scopus Author ID sin buscarlo manualmente, ejecuta <code>python Vigilancia2.py</code> con la misma planilla — busca por nombre y lo vincula automáticamente, luego carga el JSON aquí.</div>`:''}`;
+      ℹ️ Para obtener el Scopus Author ID ejecuta <code>python Vigilancia3.py</code>.</div>`:''}`;
 }
 
 // ─── GLOBAL VIEW ─────────────────────────────
 function renderGL() {
   const t=document.getElementById('tc-gl');
-  const withORCID=invs.filter(i=>i.orcid_id).length;
-  const withScopus=invs.filter(i=>i.scopus_id).length;
-  const withANID=invs.filter(i=>i.proyectos_anid.length>0).length;
+  const withORCID  =invs.filter(i=>i.orcid_id).length;
+  const withScopus =invs.filter(i=>i.scopus_id).length;
+  const withANID   =invs.filter(i=>i.proyectos_anid.length>0).length;
+  const withOAlex  =invs.filter(i=>i.openalex_id).length;
+  const totalOA    =invs.reduce((a,i)=>a+(i.n_oa||i.publicaciones.filter(p=>p.is_oa).length),0);
+  const totalPubs  =invs.reduce((a,i)=>a+i.publicaciones.length,0);
+  const pctOA      =totalPubs?Math.round(totalOA/totalPubs*100):0;
   t.innerHTML=`
-    <div class="sg sg3" style="margin-bottom:14px">
-      ${sc('🆔','Con ORCID',withORCID,`${Math.round(withORCID/invs.length*100)}% del total`,'var(--orcid)')}
+    <div class="sg sg3" style="margin-bottom:10px">
+      ${sc('🆔','Con ORCID',withORCID,Math.round(withORCID/invs.length*100)+'% del total','var(--orcid)')}
       ${sc('📊','Con Scopus',withScopus,withScopus?'métricas disponibles':'Carga JSON','var(--scopus)')}
       ${sc('🇨🇱','Con ANID',withANID,withANID?'proyectos registrados':'Carga JSON','var(--anid)')}
+    </div>
+    <div class="sg sg2" style="margin-bottom:14px">
+      ${sc('🔓','Open Access total',totalOA+' ('+pctOA+'%)','de '+totalPubs+' publicaciones',pctOA>=50?'var(--green)':pctOA>0?'var(--amber)':'var(--muted)')}
+      ${sc('🔭','Con OpenAlex',withOAlex,Math.round(withOAlex/invs.length*100)+'% con perfil OA','var(--purple)')}
     </div>
     <div style="overflow-x:auto">
     <table class="gt">
@@ -789,9 +854,9 @@ function renderGL() {
         <th style="text-align:right">H</th>
         <th style="text-align:right">Citas</th>
         <th style="text-align:right">Docs</th>
-        <th style="text-align:right">ORCID</th>
+        <th style="text-align:right">Q1</th>
+        <th style="text-align:right">OA%</th>
         <th style="text-align:right">ANID</th>
-        <th>ORCID iD</th>
       </tr></thead>
       <tbody>${invs.map((inv,i)=>`
         <tr onclick="selectInv(${i});sw('ov',document.querySelector('.tb'))">
@@ -803,9 +868,15 @@ function renderGL() {
           <td style="text-align:right"><span class="${inv.h_index>=15?'h-hi':inv.h_index>=8?'h-md':''}">${inv.h_index||'—'}</span></td>
           <td style="text-align:right"><span class="${inv.citas>=500?'c-hi':''}">${inv.citas?inv.citas.toLocaleString():'—'}</span></td>
           <td style="text-align:right">${inv.documentos||'—'}</td>
-          <td style="text-align:right">${inv.obras_orcid||'—'}</td>
+          <td style="text-align:right;color:#22d3ee;font-weight:600">
+            ${inv.publicaciones.filter(p=>p.q==='Q1').length||'—'}</td>
+          <td style="text-align:right">${(()=>{
+            const n=inv.n_oa||inv.publicaciones.filter(p=>p.is_oa).length;
+            const tot=inv.publicaciones.length;
+            const pct=tot?Math.round(n/tot*100):0;
+            return n?`<span style="color:#34d399;font-weight:600">${pct}%</span>`:'—';
+          })()}</td>
           <td style="text-align:right">${inv.proyectos_anid.length||'—'}</td>
-          <td style="font-size:10px;color:var(--muted)">${inv.orcid_id||'Sin ORCID'}</td>
         </tr>`).join('')}
       </tbody>
     </table></div>`;

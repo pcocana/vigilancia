@@ -115,6 +115,21 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
   color:var(--purple);border:1px solid #a78bfa44;font-weight:600}
 .pub-oa-bar{display:flex;height:10px;border-radius:4px;overflow:hidden;margin:6px 0 4px}
 .pub-oa-seg{height:100%}
+.co-row{display:flex;align-items:center;gap:10px;padding:7px 0;
+  border-bottom:1px solid var(--border)}
+.co-tipo{font-size:9px;padding:2px 6px;border-radius:3px;font-weight:700;
+  white-space:nowrap;flex-shrink:0}
+.co-av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;font-size:9px;font-weight:700;flex-shrink:0}
+.co-inst{font-size:10px;color:var(--muted);margin-top:1px}
+.co-pais{font-size:9px;padding:1px 5px;border-radius:2px;
+  background:var(--dim);color:var(--muted);font-family:monospace}
+.co-n{font-size:11px;font-weight:700;margin-left:auto;flex-shrink:0}
+.tipo-tab{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.tipo-pill{padding:4px 10px;border-radius:12px;font-size:10px;font-weight:600;
+  cursor:pointer;border:1px solid transparent;transition:all .2s}
+.tipo-pill.active{border-color:currentColor}
+.co-grafo-svg text{font-family:system-ui}
 .ac{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:13px;margin-bottom:9px}
 .ac-bgs{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:7px}
 .typ{font-size:10px;padding:2px 6px;border-radius:3px;font-weight:600}
@@ -719,39 +734,141 @@ function renderPub(inv) {
 }
 
 // ─── COLLABORATIONS TAB ──────────────────────
+const TIPO_CO = {
+  'PUCV'         : {col:'#22d3ee', bg:'#22d3ee18', lbl:'PUCV'},
+  'Nacional'     : {col:'#f59e0b', bg:'#f59e0b18', lbl:'Nacional'},
+  'Internacional': {col:'#34d399', bg:'#34d39918', lbl:'Intl.'},
+  'Sin datos'    : {col:'#64748b', bg:'#64748b18', lbl:'S/D'},
+};
+const PAIS_FLAG = {CL:'🇨🇱',US:'🇺🇸',ES:'🇪🇸',BR:'🇧🇷',DE:'🇩🇪',FR:'🇫🇷',
+  GB:'🇬🇧',AU:'🇦🇺',MX:'🇲🇽',AR:'🇦🇷',CO:'🇨🇴',PE:'🇵🇪',PT:'🇵🇹',IT:'🇮🇹',
+  JP:'🇯🇵',CA:'🇨🇦',NL:'🇳🇱',SE:'🇸🇪',NZ:'🇳🇿',NO:'🇳🇴',FI:'🇫🇮',DK:'🇩🇰'};
+
+let coFiltro = 'todos';
+
 function renderCol(inv) {
   const t=document.getElementById('tc-col');
   const co=inv.coautores_list||[];
   if(!co.length){
-    t.innerHTML=`<div class="alert al-w">⚠️ Sin datos de colaboración. Ejecuta <code>Vigilancia3.py</code> y carga el <code>datos_dashboard.json</code> desde el botón 📂.</div>`;return;
+    t.innerHTML=`<div class="alert al-w">⚠️ Sin datos de colaboración. Ejecuta <code>Vigilancia3.py</code> y carga el <code>datos_dashboard.json</code>.</div>`;
+    return;
   }
-  const cx=220,cy=130,r=90,n=co.length;
-  const nodes=co.map((c,i)=>{const a=(i/Math.max(n,1))*2*Math.PI-Math.PI/2;return{...c,x:cx+r*Math.cos(a),y:cy+r*Math.sin(a)};});
+
+  // Conteos por tipo
+  const tipos = {PUCV:0, Nacional:0, Internacional:0, 'Sin datos':0};
+  co.forEach(c=>{tipos[c.tipo||'Sin datos']=(tipos[c.tipo||'Sin datos']||0)+1});
+  const nIntl  = tipos['Internacional'];
+  const nNac   = tipos['Nacional'];
+  const nPUCV  = tipos['PUCV'];
+  const nSD    = tipos['Sin datos'];
+  const totalPapers = co.reduce((a,c)=>a+(c.n||0),0);
+
+  // Grafo SVG
+  const cx=220,cy=130,r=90,nNodes=Math.min(co.length,12);
+  const coGrafo=co.slice(0,nNodes);
+  const TIPO_NODE_COL={'PUCV':'#22d3ee','Nacional':'#f59e0b',
+                        'Internacional':'#34d399','Sin datos':'#64748b'};
+  const nodesGrafo=coGrafo.map((c,i)=>{
+    const a=(i/Math.max(nNodes,1))*2*Math.PI-Math.PI/2;
+    return {...c,x:cx+r*Math.cos(a),y:cy+r*Math.sin(a)};
+  });
+
+  function renderLista(filtro) {
+    const lista = filtro==='todos' ? co : co.filter(c=>(c.tipo||'Sin datos')===filtro);
+    return lista.map(c=>{
+      const tipo=c.tipo||'Sin datos';
+      const tc=TIPO_CO[tipo]||TIPO_CO['Sin datos'];
+      const ini=(c.nombre||'??').split(' ').map(w=>w[0]||'').join('').slice(0,2);
+      const flag=PAIS_FLAG[c.pais||'']||'';
+      const scopusLink=c.scopus_id
+        ?`<a href="https://www.scopus.com/authid/detail.uri?authorId=${c.scopus_id}"
+            target="_blank" class="a-link" style="font-size:9px">Scopus ↗</a>` : '';
+      return `<div class="co-row">
+        <div class="co-av" style="background:${tc.bg};color:${tc.col}">${ini}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600">${c.nombre||''}</div>
+          <div class="co-inst">${c.afil||'<i style="color:var(--muted)">Sin afiliación registrada</i>'}
+            ${flag?`<span style="margin-left:4px">${flag}</span>`:''}</div>
+          <div style="display:flex;gap:6px;margin-top:3px;align-items:center">
+            <span class="co-tipo" style="background:${tc.bg};color:${tc.col}">${tc.lbl}</span>
+            ${c.pais&&c.pais!==''?`<span class="co-pais">${c.pais}</span>`:''}
+            ${scopusLink}
+          </div>
+        </div>
+        <div class="co-n" style="color:${inv.color}">${c.n||0}<span style="font-size:9px;font-weight:400;color:var(--muted)"> papers</span></div>
+      </div>`;
+    }).join('');
+  }
+
   t.innerHTML=`
-    <div class="sg sg3" style="margin-bottom:14px">
-      ${sc('🤝','Colaboradores',co.length,'','var(--blue)')}
-      ${sc('🌐','Internacionales',co.filter(c=>c.country&&c.country!=='CL').length,'','var(--green)')}
-      ${sc('🇨🇱','Nacionales',co.filter(c=>!c.country||c.country==='CL').length,'','var(--amber)')}
+    <div class="sg sg4" style="margin-bottom:12px">
+      ${sc('🤝','Coautores únicos',co.length,'en red Scopus','var(--blue)')}
+      ${sc('📄','Papers analizados',totalPapers,'co-autoría','var(--purple)')}
+      ${sc('🌐','Internacionales',nIntl,nIntl?'de '+co.length+' coautores':'sin datos','var(--green)')}
+      ${sc('🇨🇱','Nacionales',nNac,nNac?'otras inst. Chile':'','var(--amber)')}
     </div>
+
     <div class="sc" style="margin-bottom:14px">
-      <div class="sc-lbl">GRAFO DE CO-AUTORÍA</div>
-      <svg viewBox="0 0 440 260" style="width:100%">
-        ${nodes.map(nd=>`<line x1="${cx}" y1="${cy}" x2="${nd.x}" y2="${nd.y}" stroke="${inv.color}" stroke-width=".8" stroke-opacity=".3"/>`).join('')}
-        <circle cx="${cx}" cy="${cy}" r="22" fill="${inv.color}25" stroke="${inv.color}" stroke-width="1.5"/>
-        <text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="700" fill="${inv.color}">${inv.initials}</text>
-        ${nodes.map(nd=>`
-          <circle cx="${nd.x}" cy="${nd.y}" r="17" fill="#0f1e30" stroke="#1a2f4a" stroke-width=".8"/>
-          <text x="${nd.x}" y="${nd.y-4}" text-anchor="middle" font-size="7" fill="#d4e5f7" font-weight="500">${(nd.nombre||nd.name||'').split('. ').pop()}</text>
-          <text x="${nd.x}" y="${nd.y+6}" text-anchor="middle" font-size="6" fill="#4d6f94">${nd.afil||nd.inst||''}</text>`).join('')}
+      <div class="sc-lbl" style="margin-bottom:8px">GRAFO DE CO-AUTORÍA</div>
+      <svg viewBox="0 0 440 260" style="width:100%" class="co-grafo-svg">
+        ${nodesGrafo.map(nd=>{
+          const nc=TIPO_NODE_COL[nd.tipo||'Sin datos']||'#64748b';
+          return `<line x1="${cx}" y1="${cy}" x2="${nd.x}" y2="${nd.y}"
+            stroke="${nc}" stroke-width="${Math.min(2,(nd.n||1)*0.4+0.5)}"
+            stroke-opacity="0.5"/>`;
+        }).join('')}
+        <circle cx="${cx}" cy="${cy}" r="24" fill="${inv.color}30"
+          stroke="${inv.color}" stroke-width="2"/>
+        <text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central"
+          font-size="11" font-weight="700" fill="${inv.color}">${inv.initials}</text>
+        ${nodesGrafo.map(nd=>{
+          const nc=TIPO_NODE_COL[nd.tipo||'Sin datos']||'#64748b';
+          const r2=Math.min(20,Math.max(13,(nd.n||1)*1.5+11));
+          const apellido=(nd.nombre||'').split(',')[0].split(' ').slice(-1)[0]||'?';
+          return `<circle cx="${nd.x}" cy="${nd.y}" r="${r2}"
+            fill="#0f1e30" stroke="${nc}" stroke-width="1.2"/>
+            <text x="${nd.x}" y="${nd.y-2}" text-anchor="middle"
+              font-size="6.5" fill="${nc}" font-weight="600">${apellido.slice(0,8)}</text>
+            <text x="${nd.x}" y="${nd.y+7}" text-anchor="middle"
+              font-size="5.5" fill="#4d6f94">${(nd.pais&&PAIS_FLAG[nd.pais])||nd.tipo?.slice(0,5)||''}</text>`;
+        }).join('')}
       </svg>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:6px">
+        ${Object.entries(TIPO_CO).map(([k,v])=>
+          `<span style="font-size:9px;display:flex;align-items:center;gap:4px">
+            <span style="width:8px;height:8px;border-radius:50%;background:${v.col};display:inline-block"></span>
+            <span style="color:var(--muted)">${v.lbl}: ${tipos[k]||0}</span>
+          </span>`).join('')}
+      </div>
     </div>
-    ${co.map(c=>`
-    <div class="id-row">
-      <div style="width:26px;height:26px;border-radius:50%;background:${inv.color}22;border:1px solid ${inv.color}44;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:${inv.color};flex-shrink:0">
-        ${(c.nombre||c.name||'??').split(' ').map(w=>w[0]).join('').slice(0,2)}</div>
-      <div style="flex:1"><div style="font-size:13px;font-weight:500">${c.nombre||c.name||''}</div><div style="font-size:11px;color:var(--muted)">${c.afil||c.inst||''}</div></div>
-      ${c.n?`<span style="font-size:11px;color:${inv.color};font-weight:600">${c.n} papers</span>`:''}
-    </div>`).join('')}`;
+
+    <div class="tipo-tab" id="co-filtro-${inv.scopus_id||'x'}">
+      ${[['todos','Todos',co.length],['Internacional','🌐 Internacional',nIntl],
+         ['Nacional','🇨🇱 Nacional',nNac],['PUCV','PUCV',nPUCV],
+         ['Sin datos','S/D',nSD]].map(([k,lbl,cnt])=>
+        `<span class="tipo-pill ${k==='todos'?'active':''}"
+          style="color:${k==='todos'?'var(--blue)':TIPO_CO[k]?.col||'var(--muted)'};
+          border-color:${k==='todos'?'var(--blue)':'transparent'};
+          background:${k==='todos'?'var(--dim)':'transparent'}"
+          onclick="filtrarCo('${inv.scopus_id||'x'}',this,'${k}',invs[${invs.indexOf(inv)}])"
+          >${lbl} <b>${cnt}</b></span>`).join('')}
+    </div>
+    <div id="co-lista-${inv.scopus_id||'x'}">${renderLista('todos')}</div>`;
+
+  // Guardar función de render en el inv para filtros
+  inv._renderCoLista = renderLista;
+}
+
+function filtrarCo(sid, el, filtro, inv) {
+  document.querySelectorAll(`#co-filtro-${sid} .tipo-pill`).forEach(p=>{
+    p.classList.remove('active');
+    p.style.background='transparent';
+    p.style.borderColor='transparent';
+  });
+  el.classList.add('active');
+  el.style.background='var(--dim)';
+  el.style.borderColor=el.style.color;
+  document.getElementById(`co-lista-${sid}`).innerHTML=inv._renderCoLista(filtro);
 }
 
 // ─── ANID TAB ────────────────────────────────

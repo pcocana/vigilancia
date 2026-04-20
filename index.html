@@ -362,27 +362,113 @@ function loadJSON(file) {
   });
 }
 
+// ── Normalización de texto para comparación ──────────────────────────────
+function normTxt(s) {
+  if (!s) return '';
+  // NFC + minúsculas + quitar acentos + quitar guiones
+  return (s.normalize('NFC')
+           .toLowerCase()
+           .normalize('NFD')
+           .replace(/[\u0300-\u036f]/g,'')  // quitar diacríticos
+           .replace(/[-_]/g,' ')              // guión → espacio
+           .replace(/\s+/g,' ')
+           .trim());
+}
+
+function simNombre(a, b) {
+  // Similitud simple: qué fracción de palabras de 'a' aparecen en 'b'
+  const pa = normTxt(a).split(' ').filter(w=>w.length>2);
+  const nb = normTxt(b);
+  if (!pa.length) return 0;
+  const hits = pa.filter(w=>nb.includes(w)).length;
+  return hits / pa.length;
+}
+
 function mergeJSON() {
   if (!jsonData?.investigadores) return;
+  let emparejados = 0;
+
   invs.forEach(inv => {
-    const match = jsonData.investigadores.find(j => {
-      const jf = (j.nombre_completo||'').toLowerCase();
-      const ap = inv.apellido.toLowerCase();
-      return jf.includes(ap) ||
-             ap.split(/\s+/).filter(p=>p.length>3).some(p => jf.includes(p));
+    const ncInv    = normTxt(inv.nombre_completo || (inv.nombre+' '+inv.apellido));
+    const apInv    = normTxt(inv.apellido  || '');
+    const nomInv   = normTxt(inv.nombre    || '');
+    const scopusInv= (inv.scopus_id || '').trim();
+    const orcidInv = (inv.orcid_id  || '').trim();
+
+    // Intentar encontrar el mejor match
+    let bestMatch = null;
+    let bestScore = 0;
+
+    jsonData.investigadores.forEach(j => {
+      const ncJ     = normTxt(j.nombre_completo || '');
+      const scopusJ = (j.scopus_id || '').trim();
+      const orcidJ  = (j.orcid_id  || '').trim();
+      let score = 0;
+
+      // 1. Match exacto por ID (máxima prioridad)
+      if (scopusInv && scopusJ && scopusInv === scopusJ) score = 100;
+      else if (orcidInv && orcidJ && orcidInv === orcidJ) score = 95;
+      else {
+        // 2. Similitud de nombre completo
+        const simFull = simNombre(ncInv, ncJ);
+        // 3. Apellido presente en JSON
+        const apEnJ   = apInv && ncJ.includes(apInv) ? 0.4 : 0;
+        // 4. Partes del apellido compuesto
+        const partAp  = apInv.split(' ')
+          .filter(p=>p.length>3)
+          .filter(p=>ncJ.includes(p)).length /
+          Math.max(1, apInv.split(' ').filter(p=>p.length>3).length);
+        // 5. Partes del nombre presentes
+        const partNom = nomInv.split(' ')
+          .filter(p=>p.length>2)
+          .filter(p=>ncJ.includes(p)).length /
+          Math.max(1, nomInv.split(' ').filter(p=>p.length>2).length);
+
+        score = Math.max(simFull, apEnJ + partAp*0.3 + partNom*0.2) * 80;
+      }
+
+      if (score > bestScore) { bestScore = score; bestMatch = j; }
     });
-    if (!match) return;
-    if (match.h_index)     inv.h_index     = match.h_index;
-    if (match.documentos)  inv.documentos  = match.documentos;
-    if (match.citas)       inv.citas       = match.citas;
-    if (match.coautores)   inv.coautores   = match.coautores;
-    if (match.areas)       inv.areas       = match.areas;
-    if (match.publicaciones?.length)  inv.publicaciones  = match.publicaciones;
-    if (match.colaboraciones?.length) inv.coautores_list  = match.colaboraciones;
-    if (match.proyectos_anid?.length) inv.proyectos_anid  = match.proyectos_anid;
-    // Preservar IDs que vengan del JSON si no los tenemos
-    if (!inv.scopus_id && match.scopus_id) inv.scopus_id = match.scopus_id;
-    if (!inv.orcid_id && match.orcid_id)   { inv.orcid_id = match.orcid_id; inv.orcid_src='json'; }
+
+    // Umbral mínimo de confianza: 40 puntos
+    if (!bestMatch || bestScore < 40) {
+      console.warn(`⚠ Sin match JSON para: ${inv.nombre_completo} (score=${bestScore.toFixed(0)})`);
+      return;
+    }
+
+    // ── Aplicar datos del JSON al investigador ──────────────────────────
+    // Usar ?? para permitir 0 (no solo truthy)
+    inv.h_index    = bestMatch.h_index    ?? inv.h_index;
+    inv.documentos = bestMatch.documentos ?? inv.documentos;
+    inv.citas      = bestMatch.citas      ?? inv.citas;
+    inv.coautores  = bestMatch.coautores  ?? inv.coautores;
+    inv.obras_orcid= bestMatch.obras_orcid?? inv.obras_orcid;
+    inv.n_oa       = bestMatch.n_oa       ?? inv.n_oa;
+    if (bestMatch.areas)        inv.areas        = bestMatch.areas;
+    if (bestMatch.empleos_actuales) inv.empleos_actuales = bestMatch.empleos_actuales;
+    if (bestMatch.educacion)    inv.educacion    = bestMatch.educacion;
+    if (bestMatch.linea)        inv.linea        = bestMatch.linea;
+    if (bestMatch.openalex_id)  inv.openalex_id  = bestMatch.openalex_id;
+    if (bestMatch.publicaciones?.length)  inv.publicaciones  = bestMatch.publicaciones;
+    if (bestMatch.colaboraciones?.length) inv.coautores_list = bestMatch.colaboraciones;
+    if (bestMatch.proyectos_anid?.length) inv.proyectos_anid = bestMatch.proyectos_anid;
+    // IDs: tomar del JSON si no los tenemos
+    if (!inv.scopus_id && bestMatch.scopus_id) {
+      inv.scopus_id = bestMatch.scopus_id; inv.scopus_src='json';
+    }
+    if (!inv.orcid_id && bestMatch.orcid_id) {
+      inv.orcid_id = bestMatch.orcid_id; inv.orcid_src='json';
+    }
+    emparejados++;
+  });
+
+  console.log(`JSON fusionado: ${emparejados}/${invs.length} investigadores emparejados`);
+  // Log detallado para diagnóstico
+  invs.forEach(inv=>{
+    const pubs = inv.publicaciones?.length||0;
+    const coauts = inv.coautores_list?.length||0;
+    if (!inv.scopus_id) console.warn(`⚠ Sin Scopus ID: ${inv.nombre_completo}`);
+    else console.log(`  ✓ ${inv.nombre_completo}: ${pubs} pubs, ${coauts} coauts, h=${inv.h_index}`);
   });
 }
 
@@ -891,10 +977,18 @@ function renderAN(inv) {
       const tipo=p.tipo||p.tipo_concurso||'';
       const tc=TIPO_COL[tipo]||'#64748b';
       const est=(p.estado||p.status||'').toLowerCase();
+      const fuente = p.fuente==='orcid'
+        ? `<span style="font-size:8px;padding:1px 5px;border-radius:3px;
+            background:#a78bfa22;color:#a78bfa;border:1px solid #a78bfa44;
+            font-weight:600">ORCID</span>`
+        : `<span style="font-size:8px;padding:1px 5px;border-radius:3px;
+            background:#22d3ee22;color:#22d3ee;border:1px solid #22d3ee44;
+            font-weight:600">ANID</span>`;
       return `<div class="ac">
         <div class="ac-bgs">
           <span class="typ" style="background:${tc}22;color:${tc};border:1px solid ${tc}44">${tipo}</span>
           <span class="typ ${est==='activo'?'s-act':'s-fin'}">${p.estado||p.status||''}</span>
+          ${fuente}
         </div>
         <div style="font-size:10px;color:var(--muted);margin-bottom:3px">${p.codigo||p.code||''}</div>
         <div class="ac-t">${p.titulo||p.title||''}</div>
@@ -902,6 +996,7 @@ function renderAN(inv) {
           <span>Inicio: ${p.año_inicio||p.year||'—'}</span>
           ${p.año_fin?`<span>Fin: ${p.año_fin}</span>`:''}
           ${p.monto?`<span class="am-g">$${parseInt(p.monto).toLocaleString()}</span>`:''}
+          ${p.org&&p.fuente==='orcid'?`<span style="color:var(--muted)">${p.org}</span>`:''}
         </div>
       </div>`;
     }).join('');

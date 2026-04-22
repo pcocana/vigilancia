@@ -452,6 +452,12 @@ function mergeJSON() {
     if (bestMatch.publicaciones?.length)  inv.publicaciones  = bestMatch.publicaciones;
     if (bestMatch.colaboraciones?.length) inv.coautores_list = bestMatch.colaboraciones;
     if (bestMatch.proyectos_anid?.length) inv.proyectos_anid = bestMatch.proyectos_anid;
+    if (bestMatch.top_keywords?.length)  inv.top_keywords      = bestMatch.top_keywords;
+    if (bestMatch.oa_topics?.length)     inv.oa_topics         = bestMatch.oa_topics;
+    if (bestMatch.pubs_total)            inv.pubs_total        = bestMatch.pubs_total;
+    if (bestMatch.pubs_5a != null)       inv.pubs_5a           = bestMatch.pubs_5a;
+    if (bestMatch.oa_5a   != null)       inv.oa_5a             = bestMatch.oa_5a;
+    if (bestMatch.oa_counts_by_year?.length) inv.oa_counts_by_year = bestMatch.oa_counts_by_year;
     // IDs: tomar del JSON si no los tenemos
     if (!inv.scopus_id && bestMatch.scopus_id) {
       inv.scopus_id = bestMatch.scopus_id; inv.scopus_src='json';
@@ -491,7 +497,7 @@ async function startProcessing(rawList) {
       color, initials,
       h_index:0, documentos:0, citas:0, coautores:0,
       areas:'', empleos_actuales:'', educacion:'', obras_orcid:0,
-      publicaciones:[], coautores_list:[], proyectos_anid:[],
+      publicaciones:[], coautores_list:[], proyectos_anid:[], top_keywords:[], oa_topics:[], oa_counts_by_year:[], pubs_total:0, pubs_5a:0, oa_5a:0,
       orcid_src: row.orcid_id ? 'planilla' : 'descubierto',
       scopus_src: row.scopus_id ? 'planilla' : 'pendiente',
     };
@@ -552,7 +558,7 @@ async function startProcessing(rawList) {
       });
       if (match) {
         if (match.h_index || match.citas || match.documentos) {
-          inv.h_index=match.h_index||0; inv.documentos=match.documentos||0;
+          inv.h_index=match.h_index||0; inv.documentos=match.documentos||0; inv.pubs_total=match.pubs_total||match.documentos||0;
           inv.citas=match.citas||0; inv.coautores=match.coautores||0;
           inv.areas=match.areas||''; inv.publicaciones=match.publicaciones||[];
           inv.coautores_list=match.colaboraciones||[];
@@ -727,22 +733,67 @@ function renderPH(inv) {
 // ─── OVERVIEW TAB ─────────────────────────────
 function renderOV(inv) {
   const t=document.getElementById('tc-ov');
-  t.innerHTML=`
+
+  // Gráfico tendencia anual
+  const cby = (inv.oa_counts_by_year||[]).filter(y=>y.year>=2019).sort((a,b)=>a.year-b.year);
+  const tendenciaHtml = cby.length ? (()=>{
+    const maxW = Math.max(...cby.map(y=>y.works_count),1);
+    const bars = cby.map(y=>{
+      const hW  = Math.round((y.works_count/maxW)*80);
+      const hOA = Math.round((y.oa_works_count/maxW)*80);
+      return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1">
+        <div style="font-size:8px;color:var(--muted);font-weight:600">${y.works_count}</div>
+        <div style="width:100%;height:80px;display:flex;flex-direction:column;justify-content:flex-end">
+          <div style="width:100%;height:${hOA}px;background:#34d399;border-radius:2px 2px 0 0" title="OA: ${y.oa_works_count}"></div>
+          <div style="width:100%;height:${Math.max(0,hW-hOA)}px;background:#3b82f6;opacity:.5" title="Cerrado: ${y.works_count-y.oa_works_count}"></div>
+        </div>
+        <div style="font-size:9px;color:var(--muted)">${String(y.year).slice(2)}</div>
+      </div>`;
+    }).join('');
+    const t5   = cby.slice(-5).reduce((a,y)=>a+y.works_count,0);
+    const oa5  = cby.slice(-5).reduce((a,y)=>a+y.oa_works_count,0);
+    const pct5 = t5 ? Math.round(oa5/t5*100) : 0;
+    return `<div class="sc" style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div class="sc-lbl">PRODUCCIÓN POR AÑO</div>
+        <div style="font-size:9px;color:var(--muted)">
+          5 años: <b style="color:var(--text)">${t5}</b> pubs ·
+          OA: <b style="color:#34d399">${pct5}%</b>
+        </div>
+      </div>
+      <div style="display:flex;gap:3px;align-items:flex-end;height:95px">${bars}</div>
+      <div style="display:flex;gap:8px;margin-top:5px;font-size:9px">
+        <span><span style="display:inline-block;width:8px;height:8px;background:#3b82f6;opacity:.5;margin-right:2px"></span>Cerrado</span>
+        <span><span style="display:inline-block;width:8px;height:8px;background:#34d399;margin-right:2px"></span>OA</span>
+      </div>
+    </div>`;
+  })() : '';
+
+  t.innerHTML=tendenciaHtml+`
     <div class="sg sg4">
       ${sc('📈','Índice H',inv.h_index,inv.h_index?'Scopus':'Sin datos',inv.h_index>=15?'var(--green)':inv.h_index>=8?'var(--amber)':'var(--muted)')}
       ${sc('💬','Citas Totales',inv.citas.toLocaleString(),'Scopus',inv.citas>=500?'var(--blue)':'var(--muted)')}
-      ${sc('📄','Documentos',inv.documentos,'Scopus','var(--purple)')}
+      ${sc('📄','Documentos',(inv.pubs_total||inv.documentos),'Scopus+OA','var(--purple)')}
       ${sc('🆔','Obras ORCID',inv.obras_orcid,inv.orcid_id?'Auto-descubierto':'Sin ORCID','var(--orcid)')}
     </div>
     <div class="sg sg4">
       ${sc('🤝','Coautores',inv.coautores,'red Scopus','var(--coral)')}
       ${sc('🇨🇱','Proyectos ANID',inv.proyectos_anid.length,inv.proyectos_anid.filter(p=>(p.estado||p.status)==='Activo').length+' activos','var(--amber)')}
-      ${sc('📋','Publicaciones',inv.publicaciones.length,'Scopus + OpenAlex','var(--green)')}
+      ${(()=>{
+        const tot = inv.pubs_total || inv.publicaciones.length;
+        const sc_docs = inv.documentos || inv.publicaciones.filter(p=>!p.solo_oa).length;
+        const oa_extra = tot > sc_docs ? tot - sc_docs : 0;
+        const sub = oa_extra
+          ? `${sc_docs} Scopus + ${oa_extra} solo OA`
+          : 'Scopus + OpenAlex';
+        return sc('📋','Publicaciones', tot, sub, 'var(--green)');
+      })()}
       ${(()=>{const n=inv.n_oa||inv.publicaciones.filter(p=>p.is_oa).length;
         const tot=inv.publicaciones.length;const pct=tot?Math.round(n/tot*100):0;
         return sc('🔓','Open Access',n+' ('+pct+'%)','de '+tot+' publicaciones',
           pct>=50?'var(--green)':pct>0?'var(--amber)':'var(--muted)');})()}
     </div>
+
     ${inv.publicaciones.length?(()=>{
       const cnt={gold:0,green:0,hybrid:0,bronze:0,closed:0};
       inv.publicaciones.forEach(p=>{const s=p.oa_status||'closed';if(s in cnt)cnt[s]++;});
@@ -758,6 +809,24 @@ function renderOV(inv) {
         <div style="display:flex;gap:8px;flex-wrap:wrap">${lbls}</div>
       </div>`;
     })():''}
+    ${(inv.top_keywords||[]).length ? `
+    <div class="sc" style="margin-bottom:14px">
+      <div class="sc-lbl" style="margin-bottom:8px">TÓPICOS DE INVESTIGACIÓN
+        <span style="font-size:8px;color:var(--muted);font-weight:400;margin-left:4px">
+          ${inv.oa_topics?.length ? '· OpenAlex' : '· Scopus keywords'}
+        </span>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px">
+        ${(inv.top_keywords||[]).map(([kw,n],i)=>`
+          <span style="padding:4px 10px;border-radius:10px;font-size:10px;
+            background:${i===0?'var(--blue)22':'var(--dim)'};
+            border:1px solid ${i===0?'var(--blue)':'var(--border)'};
+            color:${i===0?'var(--blue)':'var(--text)'}">
+            ${kw}
+            <span style="color:var(--muted);font-size:9px;margin-left:3px">${n}</span>
+          </span>`).join('')}
+      </div>
+    </div>` : ''}
     <div class="sg sg2">
       <div class="sc">
         <div class="sc-lbl">EMPLEO ACTUAL (ORCID)</div>
@@ -1076,7 +1145,7 @@ function renderGL() {
           <td style="font-size:11px;color:var(--muted)">${inv.ua}</td>
           <td style="text-align:right"><span class="${inv.h_index>=15?'h-hi':inv.h_index>=8?'h-md':''}">${inv.h_index||'—'}</span></td>
           <td style="text-align:right"><span class="${inv.citas>=500?'c-hi':''}">${inv.citas?inv.citas.toLocaleString():'—'}</span></td>
-          <td style="text-align:right">${inv.documentos||'—'}</td>
+          <td style="text-align:right">${inv.pubs_total||inv.documentos||'—'}</td>
           <td style="text-align:right;color:#22d3ee;font-weight:600">
             ${inv.publicaciones.filter(p=>p.q==='Q1').length||'—'}</td>
           <td style="text-align:right">${(()=>{

@@ -465,6 +465,12 @@ function mergeJSON() {
     if (!inv.orcid_id && bestMatch.orcid_id) {
       inv.orcid_id = bestMatch.orcid_id; inv.orcid_src='json';
     }
+    // Campos de identidad_investigadores.py: ResearcherID confirmado y
+    // alertas de posibles perfiles duplicados (Scopus / OpenAlex).
+    if (!inv.research_id && bestMatch.research_id) inv.research_id = bestMatch.research_id;
+    if (bestMatch.duplicados_scopus)   inv.duplicados_scopus   = bestMatch.duplicados_scopus;
+    if (bestMatch.duplicados_openalex) inv.duplicados_openalex = bestMatch.duplicados_openalex;
+    if (bestMatch.identidad_notas)     inv.identidad_notas     = bestMatch.identidad_notas;
     emparejados++;
   });
 
@@ -715,6 +721,8 @@ function selectInv(i) {
 
 // ─── PROFILE HEADER ──────────────────────────
 function renderPH(inv) {
+  const dup = inv.duplicados_scopus || inv.duplicados_openalex;
+  const dupTitle = [inv.duplicados_scopus, inv.duplicados_openalex].filter(Boolean).join(' | ');
   document.getElementById('ph').innerHTML=`
     <div class="flex gap8" style="align-items:center">
       <div class="ph-av" style="background:${inv.color}22;border:2px solid ${inv.color}60;color:${inv.color}">${inv.initials}</div>
@@ -725,6 +733,7 @@ function renderPH(inv) {
           ${inv.orcid_id?`<span class="badge b-or" title="${inv.orcid_src}">ORCID: ${inv.orcid_id}</span>`:''}
           ${inv.scopus_id?`<span class="badge b-sc">Scopus: ${inv.scopus_id}</span>`:''}
           ${inv.research_id?`<span class="badge" style="background:var(--dim);color:var(--muted);border:1px solid var(--border)">RID: ${inv.research_id}</span>`:''}
+          ${dup?`<span class="badge" style="background:#e0333322;color:#e03333;border:1px solid #e0333344" title="${dupTitle}">⚠ Posible perfil duplicado</span>`:''}
         </div>
       </div>
     </div>`;

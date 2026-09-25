@@ -353,10 +353,10 @@ function loadJSON(file) {
     const r = new FileReader();
     r.onload = e => res(e.target.result);
     r.readAsText(file);
-  }).then(txt => {
+  }).then(async txt => {
     try {
       jsonData = JSON.parse(txt);
-      if (invs.length > 0) { mergeJSON(); selectInv(sel); buildSidebar(); }
+      if (invs.length > 0) { await mergeJSON(); selectInv(sel); buildSidebar(); }
       toast(`✅ JSON fusionado — ${jsonData.investigadores?.length||0} investigadores con datos Scopus/ANID`);
     } catch(e) { toast('❌ Error al leer el JSON', true); }
   });
@@ -384,9 +384,10 @@ function simNombre(a, b) {
   return hits / pa.length;
 }
 
-function mergeJSON() {
+async function mergeJSON() {
   if (!jsonData?.investigadores) return;
   let emparejados = 0;
+  const corregidos = []; // investigadores cuyo ORCID auto-descubierto era incorrecto
 
   invs.forEach(inv => {
     const ncInv    = normTxt(inv.nombre_completo || (inv.nombre+' '+inv.apellido));
@@ -406,8 +407,12 @@ function mergeJSON() {
       let score = 0;
 
       // 1. Match exacto por ID (máxima prioridad)
+      // El ORCID solo es un criterio de match confiable si viene verificado
+      // (planilla o ya confirmado por json), NO si fue auto-descubierto en el
+      // navegador, porque un ID mal descubierto puede coincidir con el ORCID
+      // real de otra persona y hacer que se fusionen los datos equivocados.
       if (scopusInv && scopusJ && scopusInv === scopusJ) score = 100;
-      else if (orcidInv && orcidJ && orcidInv === orcidJ) score = 95;
+      else if (orcidInv && orcidJ && orcidInv === orcidJ && inv.orcid_src !== 'descubierto') score = 95;
       else {
         // 2. Similitud de nombre completo
         const simFull = simNombre(ncInv, ncJ);
@@ -462,8 +467,10 @@ function mergeJSON() {
     if (!inv.scopus_id && bestMatch.scopus_id) {
       inv.scopus_id = bestMatch.scopus_id; inv.scopus_src='json';
     }
-    if (!inv.orcid_id && bestMatch.orcid_id) {
+    if (bestMatch.orcid_id && (!inv.orcid_id || inv.orcid_src === 'descubierto')) {
+      const eraIncorrecto = inv.orcid_src === 'descubierto' && inv.orcid_id && inv.orcid_id !== bestMatch.orcid_id;
       inv.orcid_id = bestMatch.orcid_id; inv.orcid_src='json';
+      if (eraIncorrecto) corregidos.push(inv);
     }
     // Campos de identidad_investigadores.py: ResearcherID confirmado y
     // alertas de posibles perfiles duplicados (Scopus / OpenAlex).
@@ -482,6 +489,18 @@ function mergeJSON() {
     if (!inv.scopus_id) console.warn(`⚠ Sin Scopus ID: ${inv.nombre_completo}`);
     else console.log(`  ✓ ${inv.nombre_completo}: ${pubs} pubs, ${coauts} coauts, h=${inv.h_index}`);
   });
+
+  // ── Re-consultar perfil ORCID real para IDs corregidos ──────────────
+  // Si el ORCID auto-descubierto era de otra persona, el empleo/educación
+  // ya guardados también son de esa otra persona: hay que refrescarlos.
+  for (const inv of corregidos) {
+    console.warn(`⚠ ORCID corregido para ${inv.nombre_completo}: se refresca el perfil (${inv.orcid_id})`);
+    inv.empleos_actuales = ''; inv.educacion = ''; inv.obras_orcid = 0;
+    try {
+      const od = await fetchORCID(inv.orcid_id);
+      Object.assign(inv, od);
+    } catch (e) { console.warn('Error al refrescar perfil ORCID', inv.orcid_id, e); }
+  }
 }
 
 // ─── PROCESSING ───────────────────────────────
@@ -619,7 +638,8 @@ async function discoverORCID(nombre, apellido) {
       // Si hay un único resultado, tomarlo directamente
       if (results.length === 1)
         return results[0]['orcid-identifier']?.path || null;
-      // Si hay varios, intentar filtrar por institución desde ORCID
+      // Si hay varios, tomar el primero como mejor candidato; si es incorrecto,
+      // mergeJSON() lo corregirá más adelante usando el JSON como fuente confiable.
       return results[0]['orcid-identifier']?.path || null;
     } catch { /* CORS u otro error */ }
     await sleep(300);
@@ -640,11 +660,21 @@ async function fetchORCID(id) {
     ]);
     if (er.ok) {
       const d=await er.json();
+      const hoy = new Date();
+      const esVigente = (endDate) => {
+        if (!endDate) return true; // sin fecha de término = vigente
+        const y = parseInt(endDate.year?.value, 10);
+        if (!y) return true;
+        const m = parseInt(endDate.month?.value, 10) || 12;
+        const day = parseInt(endDate.day?.value, 10) || 28;
+        const fin = new Date(y, m-1, day);
+        return fin >= hoy; // fecha de término futura = todavía vigente
+      };
       const emp=[];
       for(const g of d['affiliation-group']||[]){
         for(const s of g.summaries||[]){
           const e=s['employment-summary']||{};
-          if(!e['end-date']){
+          if(esVigente(e['end-date'])){
             const org=e.organization?.name||'';
             const role=e['role-title']||'';
             const dep=e['department-name']||'';
